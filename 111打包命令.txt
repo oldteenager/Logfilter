@@ -1,0 +1,1 @@
+pyinstaller --onefile --noconsole .\log_gui_filter_color.py

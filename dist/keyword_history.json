@@ -1,0 +1,22 @@
+[
+  "TIME[0],BOS,DK 17,DK 18 R,STID[51,DK RPAStatusReset,RSPA key,DK19,Pble,KeyButtonSts",
+  "TIME[0],BOS,DK 17,DK 18 R,STID[51,DK RPAStatusReset,RSPA key,DK19,Pble",
+  "TIME\\[0],BOS,DK 17,DK 18 R,STID\\[51,DK RPAStatusReset,RSPA key,DK19,Pble",
+  "TIME\\[0]|BOS|DK 17|DK 18 R|STID\\[51|DK RPAStatusReset|RSPA key|DK19|Pble",
+  "TIME[0],BOS,[0064],[0efe],DTC[,[0065],[0066]",
+  "TIME[0],BOS,[0064]",
+  "TIME[0],DTC[",
+  "TIME[0],DTC",
+  "TIME[0],",
+  "TIME[0]",
+  "TIME[0]|DTC[",
+  "DTC[",
+  "TIME[0],canrpc",
+  "TIME[0],BOS,[0efe],DTC[",
+  "TIME",
+  "TIME[0],BOS,[0064],[0efe],DTC[",
+  "TIME[0],BOS,[0efe],[0efd],DTC[",
+  "canrpc",
+  "src=[0b]",
+  "F15 C"
+]
