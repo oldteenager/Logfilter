@@ -19,8 +19,21 @@ from tkinter import filedialog, scrolledtext, messagebox, ttk, simpledialog
 import re
 import json
 import os
+from datetime import datetime
+
+# 尝试导入拖拽支持库
+try:
+    import tkinterdnd2 as tkdnd
+    from tkinterdnd2 import DND_FILES, TkinterDnD
+    DRAG_DROP_AVAILABLE = True
+    print("✅ tkinterdnd2 拖拽库加载成功")
+except ImportError:
+    DRAG_DROP_AVAILABLE = False
+    print("⚠️ tkinterdnd2 拖拽库不可用")
+import os
 import threading
 import time
+from datetime import datetime
 
 # 尝试导入超级现代化UI增强器
 try:
@@ -50,6 +63,7 @@ except ImportError:
     print("⚠️ 界面美化增强器不可用")
 
 # 定义高亮颜色配置列表
+# 关键字高亮颜色配置
 COLOR_LIST = [
     {'fg': '#000000', 'bg': '#FFFF00'},    # 黑字黄底
     {'fg': '#000000', 'bg': '#00FFFF'},    # 黑字青底
@@ -59,6 +73,18 @@ COLOR_LIST = [
     {'fg': '#000000', 'bg': '#FFA500'},    # 黑字橙底
     {'fg': '#FFFFFF', 'bg': '#008000'},    # 白字绿底
     {'fg': '#FFFFFF', 'bg': '#800080'}     # 白字紫底
+]
+
+# 暗黑模式下的关键字高亮颜色（更统一和清晰的色彩）
+DARK_COLOR_LIST = [
+    {'fg': '#1E1E1E', 'bg': '#FFD700'},    # 深字金底 - 醒目但不刺眼
+    {'fg': '#1E1E1E', 'bg': '#32CD32'},    # 深字亮绿底 - 清晰可见
+    {'fg': '#FFFFFF', 'bg': '#FF6B35'},    # 白字橙红底 - 温暖色调
+    {'fg': '#FFFFFF', 'bg': '#4A90E2'},    # 白字蓝底 - 统一蓝色系
+    {'fg': '#FFFFFF', 'bg': '#9B59B6'},    # 白字紫底 - 优雅紫色
+    {'fg': '#1E1E1E', 'bg': '#F39C12'},    # 深字橙底 - 活力色彩
+    {'fg': '#FFFFFF', 'bg': '#E74C3C'},    # 白字红底 - 对比鲜明
+    {'fg': '#FFFFFF', 'bg': '#2ECC71'}     # 白字绿底 - 自然色彩
 ]
 
 # 定义主题配置
@@ -79,23 +105,82 @@ THEMES = {
         'frame_bg': '#F0F0F0',
         'scrollbar_bg': '#F0F0F0',
         'scrollbar_fg': '#C0C0C0',
+        'border': '#E0E0E0',
+        'border_focus': '#0078D4',
+        'status_bg': '#F5F5F5',
+        'tooltip_bg': '#FFFFCC',
+        'tooltip_fg': '#000000',
     },
     'dark': {
-        'bg': '#2B2B2B',
-        'fg': '#FFFFFF',
-        'select_bg': '#0078D4',
+        'bg': '#1E1E1E',              # 主背景 - 深灰色
+        'fg': '#E6E6E6',              # 主文字 - 亮灰色
+        'select_bg': '#0078D4',       # 选择背景 - 统一蓝色
+        'select_fg': '#FFFFFF',       # 选择前景 - 纯白
+        'entry_bg': '#2D2D30',        # 输入框背景 - 稍浅的深灰
+        'entry_fg': '#E6E6E6',        # 输入框文字 - 亮灰色
+        'text_bg': '#1E1E1E',         # 文本区背景 - 与主背景一致
+        'text_fg': '#E6E6E6',         # 文本区文字 - 亮灰色
+        'text_select_bg': '#0078D4',  # 文本选择背景 - 统一蓝色
+        'text_primary': '#E6E6E6',    # 主要文字色
+        'text_secondary': '#B0B0B0',  # 次要文字色
+        'button_bg': '#2D2D30',       # 按钮背景 - 稍浅深灰
+        'button_fg': '#E6E6E6',       # 按钮文字 - 亮灰色
+        'button_active_bg': '#404040', # 按钮激活 - 中灰色
+        'frame_bg': '#1E1E1E',        # 框架背景 - 与主背景一致
+        'scrollbar_bg': '#2D2D30',    # 滚动条背景
+        'scrollbar_fg': '#666666',    # 滚动条前景
+        'border': '#404040',          # 边框色 - 中灰
+        'border_focus': '#0078D4',    # 焦点边框 - 统一蓝色
+        'accent': '#0078D4',          # 强调色 - 统一蓝色
+        'status_bg': '#1E1E1E',       # 状态栏背景
+        'tooltip_bg': '#404040',      # 工具提示背景
+        'tooltip_fg': '#E6E6E6',      # 工具提示文字
+    },
+    # VS Code风格暗色主题
+    'vscode_dark': {
+        'bg': '#1E1E1E',
+        'fg': '#D4D4D4',
+        'select_bg': '#0078D4',  # VS Code蓝色
         'select_fg': '#FFFFFF',
         'entry_bg': '#3C3C3C',
-        'entry_fg': '#FFFFFF',
+        'entry_fg': '#E6E6E6',  # 更清晰的输入文字
         'text_bg': '#1E1E1E',
-        'text_fg': '#FFFFFF',
-        'text_select_bg': '#264F78',
-        'button_bg': '#404040',
-        'button_fg': '#FFFFFF',
+        'text_fg': '#D4D4D4',
+        'text_select_bg': '#0078D4',  # 统一选择色
+        'button_bg': '#37373D',  # VS Code按钮色
+        'button_fg': '#E6E6E6',
         'button_active_bg': '#505050',
-        'frame_bg': '#2B2B2B',
-        'scrollbar_bg': '#404040',
-        'scrollbar_fg': '#606060',
+        'frame_bg': '#252526',
+        'scrollbar_bg': '#2B2B2B',
+        'scrollbar_fg': '#666666',
+        'border': '#3C3C3C',
+        'border_focus': '#0078D4',  # 统一焦点色
+        'status_bg': '#0078D4',  # VS Code状态栏色
+        'tooltip_bg': '#252526',
+        'tooltip_fg': '#E6E6E6',
+    },
+    # GitHub风格暗色主题
+    'github_dark': {
+        'bg': '#0D1117',
+        'fg': '#F0F6FC',
+        'select_bg': '#1F6FEB',
+        'select_fg': '#FFFFFF',
+        'entry_bg': '#21262D',
+        'entry_fg': '#F0F6FC',  # 更亮的输入文字
+        'text_bg': '#0D1117',
+        'text_fg': '#E6EDF3',  # 稍微柔和的文字色
+        'text_select_bg': '#1F6FEB',
+        'button_bg': '#21262D',  # 更统一的按钮背景
+        'button_fg': '#F0F6FC',
+        'button_active_bg': '#30363D',
+        'frame_bg': '#161B22',
+        'scrollbar_bg': '#21262D',
+        'scrollbar_fg': '#6E7681',
+        'border': '#30363D',
+        'border_focus': '#1F6FEB',
+        'status_bg': '#161B22',  # 更深的状态栏
+        'tooltip_bg': '#161B22',
+        'tooltip_fg': '#F0F6FC',
     }
 }
 
@@ -104,8 +189,14 @@ class LogFilterApp:
     日志筛选应用程序主类 - 超级现代化版本
     """
     def __init__(self):
-        # 创建主窗口
-        self.root = tk.Tk()
+        # 创建支持拖拽的主窗口
+        if DRAG_DROP_AVAILABLE:
+            self.root = TkinterDnD.Tk()  # 使用支持拖拽的Tk窗口
+            print("✅ 创建了支持拖拽的主窗口")
+        else:
+            self.root = tk.Tk()  # 普通窗口
+            print("ℹ️ 创建了普通主窗口")
+            
         self.root.title("🚀 LogMaster Pro - 专业日志分析工具")
         self.root.geometry("1200x800")
         
@@ -130,9 +221,18 @@ class LogFilterApp:
         self.multiple_keywords = []  # 多关键字搜索
         self.current_keywords = []  # 当前搜索的关键词列表，用于高亮
         
-        # 初始化主题
-        self.current_theme = 'modern_light' if ULTRA_MODERN_UI_AVAILABLE else 'light'
+        # 时间相关变量
+        self.base_timestamp = None  # 基准时间戳 (如 03277.850)
+        self.base_datetime = None   # 基准完整时间 (如 2025/07/22 19:15:02)
+        self.show_time_column = True  # 是否显示时间列
+        self.has_time_baseline = False  # 是否找到TIME[0]基准行
+        
+        # 初始化主题 - 强制使用深色主题确保界面统一
+        self.current_theme = 'modern_dark' if ULTRA_MODERN_UI_AVAILABLE else 'dark'
         self.themes = THEMES.copy()
+        
+        # 立即设置窗口为深色背景
+        self.root.configure(bg='#1E1E1E')
         
         # 存储需要更新主题的组件
         self.theme_widgets = []
@@ -141,19 +241,29 @@ class LogFilterApp:
         self.create_widgets()
         self.apply_theme()
         
+        # 启用文件拖拽功能
+        self.setup_drag_and_drop()
+        
         # 应用超级现代化UI增强（优先级最高）
-        if ULTRA_MODERN_UI_AVAILABLE:
-            self.ui_enhancer = apply_ultra_modern_ui(self)
-            print("✨ 超级现代化UI增强已应用")
-        # 备选：应用现代化UI增强
-        elif MODERN_UI_AVAILABLE:
-            self.ui_enhancer = apply_modern_ui(self)
-            print("🎨 现代化UI增强已应用")
+        try:
+            if ULTRA_MODERN_UI_AVAILABLE:
+                self.ui_enhancer = apply_ultra_modern_ui(self)
+                print("✨ 超级现代化UI增强已应用")
+            # 备选：应用现代化UI增强
+            elif MODERN_UI_AVAILABLE:
+                self.ui_enhancer = apply_modern_ui(self)
+                print("🎨 现代化UI增强已应用")
+        except Exception as e:
+            print(f"⚠️ UI增强器应用失败，使用基础界面: {e}")
+            self.ui_enhancer = None
             
         # 应用界面美化（可叠加）
-        if BEAUTY_ENHANCER_AVAILABLE:
-            beautify_app(self)
-            print("💄 界面美化已应用")
+        try:
+            if BEAUTY_ENHANCER_AVAILABLE:
+                beautify_app(self)
+                print("💄 界面美化已应用")
+        except Exception as e:
+            print(f"⚠️ 界面美化应用失败: {e}")
     
     def create_widgets(self):
         """创建主界面"""
@@ -195,9 +305,17 @@ class LogFilterApp:
         self.history_button = tk.Button(self.toolbar, text="📚 历史", command=self.show_history_manager)
         self.history_button.pack(side=tk.LEFT, padx=(0, 5))
         
+        # 时间显示切换按钮
+        self.time_toggle_button = tk.Button(self.toolbar, text="⏰ 时间列", command=self.toggle_time_display)
+        self.time_toggle_button.pack(side=tk.LEFT, padx=(0, 5))
+        
         # 主题切换按钮
         self.theme_button = tk.Button(self.toolbar, text="🌙 暗黑", command=self.toggle_theme)
         self.theme_button.pack(side=tk.RIGHT, padx=(5, 0))
+        
+        # 主题选择菜单按钮  
+        self.theme_menu_button = tk.Button(self.toolbar, text="🎨 主题", command=self.show_theme_menu)
+        self.theme_menu_button.pack(side=tk.RIGHT, padx=(5, 0))
         
         # 添加到主题组件列表
         self.theme_widgets.extend([
@@ -207,7 +325,9 @@ class LogFilterApp:
             ('button', self.bookmark_button),
             ('button', self.export_button),
             ('button', self.history_button),
-            ('button', self.theme_button)
+            ('button', self.time_toggle_button),
+            ('button', self.theme_button),
+            ('button', self.theme_menu_button)
         ])
     
     def create_content_area(self):
@@ -292,14 +412,18 @@ class LogFilterApp:
         
         tk.Label(self.left_frame, text="📋 搜索结果", font=('Arial', 10, 'bold')).pack(anchor=tk.W)
         
+        # 创建搜索结果显示区域的框架，包含滚动条
+        self.result_display_frame = tk.Frame(self.left_frame)
+        self.result_display_frame.pack(fill=tk.BOTH, expand=True)
+        
         # 结果列表
-        self.result_listbox = tk.Listbox(self.left_frame, height=15)
-        self.result_listbox.pack(fill=tk.BOTH, expand=True, padx=(0, 5))
+        self.result_listbox = tk.Listbox(self.result_display_frame, height=15)
+        self.result_listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         self.result_listbox.bind('<<ListboxSelect>>', self.on_result_select)
         
         # 使用Text组件替代Listbox以支持高亮
-        self.result_text = tk.Text(self.left_frame, height=15, width=50, wrap=tk.NONE)
-        self.result_text.pack(fill=tk.BOTH, expand=True, padx=(0, 5))
+        self.result_text = tk.Text(self.result_display_frame, height=15, width=50, wrap=tk.NONE)
+        self.result_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         self.result_text.bind('<Button-1>', self.on_result_text_click)
         self.result_text.bind('<Button-3>', self.on_result_text_right_click)  # 右键菜单
         self.result_text.config(state=tk.DISABLED)  # 设置为只读
@@ -308,8 +432,16 @@ class LogFilterApp:
         self.result_listbox.pack_forget()
         self.use_text_display = True  # 标记使用Text显示
         
-        # 添加滚动条
-        self.listbox_scrollbar = tk.Scrollbar(self.left_frame, orient=tk.VERTICAL)
+        # 添加可拖拽的垂直滚动条到搜索结果区域
+        self.result_scrollbar = tk.Scrollbar(self.result_display_frame, orient=tk.VERTICAL)
+        self.result_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        
+        # 连接滚动条与Text组件
+        self.result_text.config(yscrollcommand=self.result_scrollbar.set)
+        self.result_scrollbar.config(command=self.result_text.yview)
+        
+        # 为Listbox也配置滚动条（备用）
+        self.listbox_scrollbar = tk.Scrollbar(self.result_display_frame, orient=tk.VERTICAL)
         self.result_listbox.config(yscrollcommand=self.listbox_scrollbar.set)
         self.listbox_scrollbar.config(command=self.result_listbox.yview)
         
@@ -334,6 +466,10 @@ class LogFilterApp:
             ('combobox', self.keyword_combobox),
             ('button', self.search_button),
             ('frame', self.options_frame),
+            ('checkbutton', self.case_check),
+            ('checkbutton', self.regex_check),
+            ('radiobutton', self.and_radio),
+            ('radiobutton', self.or_radio),
             ('text', self.context_text),
             ('listbox', self.result_listbox),
             ('text', self.result_text)
@@ -415,16 +551,68 @@ class LogFilterApp:
         target_line_index = None  # 记录目标行在新内容中的位置
         context_lines = []
         
+        # 重置时间基准用于上下文显示
+        context_base_timestamp = None
+        context_base_datetime = None
+        
         for i in range(start_line, end_line):
             line_content = self.file_content[i].rstrip()
             line_number = i + 1
             
-            # 标记目标行
-            if line_number == line_num:
-                line_display = f">>> [{line_number:4d}] {line_content}\n"
-                target_line_index = len(context_lines) + 1  # 在新内容中的行号（1-based）
+            if self.show_time_column and self.has_time_baseline:
+                # 只有在有TIME[0]基准时才显示计算的时间
+                timestamp_float, datetime_obj, has_time_info, is_time_baseline = self.parse_log_timestamp(line_content)
+                
+                # 设置上下文的时间基准（每个TIME[0]都是新的校时点）
+                if is_time_baseline and timestamp_float is not None:
+                    context_base_timestamp = timestamp_float
+                    context_base_datetime = datetime_obj
+                
+                # 计算时间显示
+                time_display = ""
+                if has_time_info:
+                    if is_time_baseline:
+                        # TIME[0]基准行
+                        if datetime_obj:
+                            time_display = f"[{datetime_obj.strftime('%Y/%m/%d %H:%M:%S')}] (基准) "
+                        else:
+                            time_display = f"[{timestamp_float:07.3f}] (基准) "
+                    elif context_base_timestamp is not None and timestamp_float is not None and datetime_obj is None:
+                        # 有基准且当前行只有时间戳的情况，计算相对时间
+                        try:
+                            from datetime import timedelta
+                            time_diff_seconds = timestamp_float - context_base_timestamp
+                            if context_base_datetime:
+                                new_datetime = context_base_datetime + timedelta(seconds=time_diff_seconds)
+                                time_display = f"[{new_datetime.strftime('%Y/%m/%d %H:%M:%S')}] "
+                            else:
+                                time_display = f"[{timestamp_float:07.3f}] "
+                        except:
+                            time_display = f"[{timestamp_float:07.3f}] "
+                    elif datetime_obj is not None:
+                        # 直接有完整时间的行
+                        time_display = f"[{datetime_obj.strftime('%Y/%m/%d %H:%M:%S')}] "
+                    elif timestamp_float is not None:
+                        # 只有时间戳的行
+                        time_display = f"[{timestamp_float:07.3f}] "
+                    else:
+                        time_display = "[---.---] "
+                else:
+                    time_display = "[---.---] "
+                
+                # 标记目标行
+                if line_number == line_num:
+                    line_display = f">>> {time_display}[{line_number:4d}] {line_content}\n"
+                    target_line_index = len(context_lines) + 1  # 在新内容中的行号（1-based）
+                else:
+                    line_display = f"    {time_display}[{line_number:4d}] {line_content}\n"
             else:
-                line_display = f"    [{line_number:4d}] {line_content}\n"
+                # 不显示时间信息的原始格式
+                if line_number == line_num:
+                    line_display = f">>> [{line_number:4d}] {line_content}\n"
+                    target_line_index = len(context_lines) + 1  # 在新内容中的行号（1-based）
+                else:
+                    line_display = f"    [{line_number:4d}] {line_content}\n"
             
             context_lines.append(line_display)
             self.context_text.insert(tk.END, line_display)
@@ -471,6 +659,14 @@ class LogFilterApp:
             if target_line_index:
                 self.context_text.see(f"{target_line_index}.0")
     
+    def get_highlight_colors(self):
+        """根据当前主题获取合适的高亮颜色"""
+        # 暗色主题使用暗色高亮方案
+        if self.current_theme in ['dark', 'vscode_dark', 'github_dark', 'modern_dark']:
+            return DARK_COLOR_LIST
+        else:
+            return COLOR_LIST
+    
     def highlight_context_keywords(self):
         """在上下文中高亮关键字 - 增强版本"""
         try:
@@ -478,15 +674,21 @@ class LogFilterApp:
             if not hasattr(self, 'current_keywords') or not self.current_keywords:
                 return
             
-            # 获取搜索选项
-            case_sensitive = getattr(self, 'case_var', tk.BooleanVar()).get()
+            # 获取搜索选项 - 安全获取，避免在根窗口创建前出错
+            case_sensitive = False
+            try:
+                if hasattr(self, 'case_var') and self.case_var:
+                    case_sensitive = self.case_var.get()
+            except tk.TclError:
+                case_sensitive = False
             
             # 清除之前的高亮
             self.context_text.tag_remove("highlight", "1.0", tk.END)
             self.context_text.tag_remove("target_line", "1.0", tk.END)
             
             # 清除之前的关键词高亮标签
-            for i in range(len(COLOR_LIST)):
+            color_list = self.get_highlight_colors()
+            for i in range(len(color_list)):
                 self.context_text.tag_remove(f"keyword_{i}", "1.0", tk.END)
             
             # 高亮目标行（以>>>开头的行）
@@ -507,7 +709,7 @@ class LogFilterApp:
                 if not keyword:
                     continue
                 
-                color_idx = keyword_idx % len(COLOR_LIST)
+                color_idx = keyword_idx % len(color_list)
                 tag_name = f"keyword_{keyword_idx}"
                 
                 start_pos = "1.0"
@@ -523,49 +725,184 @@ class LogFilterApp:
                 
                 # 配置关键词高亮样式
                 self.context_text.tag_configure(tag_name, 
-                    background=COLOR_LIST[color_idx]['bg'], 
-                    foreground=COLOR_LIST[color_idx]['fg'])
+                    background=color_list[color_idx]['bg'], 
+                    foreground=color_list[color_idx]['fg'])
             
-            # 配置目标行高亮样式
-            self.context_text.tag_configure("target_line", 
-                background="#FFE4B5",  # 淡橙色背景
-                foreground="#8B4513")  # 深棕色文字
+            # 配置目标行高亮样式 - 根据主题调整
+            if self.current_theme in ['dark', 'vscode_dark', 'github_dark', 'modern_dark']:
+                # 暗色主题下的目标行样式
+                self.context_text.tag_configure("target_line", 
+                    background="#2D5A87",  # 深蓝色背景
+                    foreground="#E6E6E6")  # 亮灰色文字
+            else:
+                # 浅色主题下的目标行样式
+                self.context_text.tag_configure("target_line", 
+                    background="#FFE4B5",  # 淡橙色背景
+                    foreground="#8B4513")  # 深棕色文字
             
         except Exception as e:
             print(f"上下文高亮失败: {e}")
     
+    def parse_log_timestamp(self, line):
+        """解析日志行的时间戳信息
+        返回: (timestamp_float, datetime_obj, has_time_info, is_time_baseline)
+        示例: [8948] [03277.850][C01]TIME[0] [2025/07/22 19:15:02] -> (3277.850, datetime_obj, True, True)
+        """
+        try:
+            timestamp_float = None
+            datetime_obj = None
+            has_time_info = False
+            is_time_baseline = False
+            
+            # 检查是否包含TIME[0]，这是时间基准行
+            if "TIME[0]" in line:
+                is_time_baseline = True
+            
+            # 解析时间戳 [xxxxx.xxx] 格式
+            timestamp_pattern = r'\[(\d+\.\d+)\]'
+            timestamp_match = re.search(timestamp_pattern, line)
+            if timestamp_match:
+                timestamp_float = float(timestamp_match.group(1))
+                has_time_info = True
+            
+            # 解析完整时间，支持多种格式
+            # 格式1: [2025/07/22 18:20:15] (单个空格)
+            # 格式2: [2025/07/22  18:20:15] (多个空格)
+            # 格式3: TIME[0] [2025/07/22 18:20:15] (TIME[0]后有空格)
+            datetime_patterns = [
+                r'\[(\d{4}/\d{2}/\d{2}\s+\d{2}:\d{2}:\d{2})\]',  # 原始模式
+                r'TIME\[0\]\s*\[(\d{4}/\d{2}/\d{2}\s+\d{2}:\d{2}:\d{2})\]',  # TIME[0]后的时间
+                r'(\d{4}/\d{2}/\d{2}\s+\d{2}:\d{2}:\d{2})',  # 没有方括号
+            ]
+            
+            for pattern in datetime_patterns:
+                datetime_match = re.search(pattern, line)
+                if datetime_match:
+                    datetime_str = datetime_match.group(1)
+                    try:
+                        datetime_obj = datetime.strptime(datetime_str, '%Y/%m/%d %H:%M:%S')
+                        has_time_info = True
+                        break
+                    except ValueError:
+                        # 如果格式不匹配，继续尝试下一个模式
+                        continue
+            
+            return timestamp_float, datetime_obj, has_time_info, is_time_baseline
+            
+        except Exception as e:
+            print(f"时间解析失败: {e}")
+            return None, None, False, False
+    
+    def calculate_time_info(self, line_content, line_num):
+        """计算时间信息，返回用于显示的时间字符串
+        显示格式: [2025/07/22 19:14:22]
+        支持多个TIME[0]校时点
+        """
+        try:
+            timestamp_float, datetime_obj, has_time_info, is_time_baseline = self.parse_log_timestamp(line_content)
+            
+            if not has_time_info:
+                return "[---.---]"  # 无时间信息
+            
+            # 如果这是TIME[0]基准行，总是更新基准（支持多次校时）
+            if is_time_baseline:
+                # 更新基准时间（每个TIME[0]都重新设置基准）
+                self.base_timestamp = timestamp_float
+                self.base_datetime = datetime_obj
+                self.has_time_baseline = True
+                
+                if datetime_obj:
+                    return f"[{datetime_obj.strftime('%Y/%m/%d %H:%M:%S')}] (基准)"
+                else:
+                    return f"[{timestamp_float:07.3f}] (基准)"
+            
+            # 只有找到TIME[0]基准行后才显示完整时间功能
+            if not self.has_time_baseline:
+                # 如果还没找到基准，只显示原始时间戳
+                if timestamp_float is not None:
+                    return f"[{timestamp_float:07.3f}]"
+                elif datetime_obj is not None:
+                    return f"[{datetime_obj.strftime('%Y/%m/%d %H:%M:%S')}]"
+                else:
+                    return "[---.---]"
+            
+            # 已有基准的情况下，计算相对时间并以完整日期时间格式显示
+            if timestamp_float is not None and self.base_timestamp is not None and self.base_datetime is not None:
+                time_diff_seconds = timestamp_float - self.base_timestamp
+                
+                # 计算基于基准时间的新时间
+                try:
+                    from datetime import timedelta
+                    new_datetime = self.base_datetime + timedelta(seconds=time_diff_seconds)
+                    # 使用完整的日期时间格式，符合用户要求
+                    return f"[{new_datetime.strftime('%Y/%m/%d %H:%M:%S')}]"
+                except Exception as e:
+                    print(f"时间计算失败: {e}")
+                    return f"[{timestamp_float:07.3f}]"
+            
+            # 如果只有完整时间信息，直接显示
+            if datetime_obj is not None:
+                return f"[{datetime_obj.strftime('%Y/%m/%d %H:%M:%S')}]"
+            
+            return "[---.---]"
+            
+        except Exception as e:
+            print(f"时间计算失败: {e}")
+            return "[---.---]"
+    
+    def reset_time_baseline(self):
+        """重置时间基准"""
+        self.base_timestamp = None
+        self.base_datetime = None
+        self.has_time_baseline = False
+    
+    def toggle_time_display(self):
+        """切换时间列显示"""
+        self.show_time_column = not self.show_time_column
+        
+        # 更新按钮文本和状态
+        if self.show_time_column:
+            if self.has_time_baseline:
+                self.time_toggle_button.config(text="⏰ 时间列")
+            else:
+                self.time_toggle_button.config(text="⏰ 时间列 (无基准)")
+        else:
+            self.time_toggle_button.config(text="⏰ 隐藏时间")
+        
+        # 如果有搜索结果，重新显示
+        if hasattr(self, 'filtered_results') and self.filtered_results:
+            keyword_input = self.keyword_entry.get().strip()
+            placeholder_text = "输入关键字，多个关键字用逗号分隔"
+            if keyword_input and keyword_input != placeholder_text:
+                self.display_results(keyword_input)
+                # 重新显示上下文（如果有选中的行）
+                if hasattr(self, 'selected_line_index') and self.selected_line_index is not None:
+                    self.show_context(self.selected_line_index)
+    
     def open_file(self):
         """打开文件"""
         try:
+            # 记住上次打开的目录
+            initial_dir = getattr(self, 'last_directory', os.getcwd())
+            
             file_path = filedialog.askopenfilename(
                 title="选择日志文件",
+                initialdir=initial_dir,
                 filetypes=[
+                    ("所有日志文件", "*.log;*.txt;*.out;*.err"),
                     ("日志文件", "*.log"),
                     ("文本文件", "*.txt"),
+                    ("输出文件", "*.out"),
+                    ("错误文件", "*.err"),
                     ("所有文件", "*.*")
                 ]
             )
             
             if file_path:
-                # 保存当前文件路径
-                self.current_file_path = file_path
-                
-                with open(file_path, 'r', encoding='utf-8', errors='ignore') as file:
-                    self.file_content = file.readlines()
-                
-                self.status_label.config(text=f"已加载文件: {os.path.basename(file_path)} ({len(self.file_content)} 行)")
-                
-                # 清空搜索结果和上下文显示
-                self.result_listbox.delete(0, tk.END)
-                self.result_text.config(state=tk.NORMAL)
-                self.result_text.delete(1.0, tk.END)
-                self.context_text.delete(1.0, tk.END)
-                
-                # 显示提示信息
-                self.result_listbox.insert(tk.END, "文件已加载，请输入关键字进行搜索...")
-                self.result_text.insert(tk.END, "文件已加载，请输入关键字进行搜索...")
-                self.context_text.insert(tk.END, "文件已加载，请输入关键字进行搜索...")
-                self.result_text.config(state=tk.DISABLED)
+                # 保存目录以供下次使用
+                self.last_directory = os.path.dirname(file_path)
+                # 使用统一的文件加载方法
+                self.load_file(file_path)
                 
         except Exception as e:
             messagebox.showerror("错误", f"打开文件失败: {str(e)}")
@@ -594,6 +931,33 @@ class LogFilterApp:
             return
         
         try:
+            # 重置时间基准
+            self.reset_time_baseline()
+            
+            # 检查文件中是否包含TIME[0]关键词，如果包含则预先扫描设置时间基准
+            has_time_keyword = False
+            for line in self.file_content:
+                if "TIME[0]" in line:
+                    has_time_keyword = True
+                    # 设置时间基准
+                    timestamp_float, datetime_obj, has_time_info, is_time_baseline = self.parse_log_timestamp(line)
+                    if is_time_baseline and datetime_obj:
+                        self.base_timestamp = timestamp_float
+                        self.base_datetime = datetime_obj
+                        self.has_time_baseline = True
+                        print(f"🕐 找到TIME[0]基准行，设置基准时间: {datetime_obj}")
+                        break
+            
+            if not has_time_keyword:
+                print("⚠️ 文件中未找到TIME[0]关键词，时间功能将不可用")
+                # 更新时间按钮状态
+                if hasattr(self, 'time_toggle_button'):
+                    self.time_toggle_button.config(text="⏰ 时间列 (无基准)")
+            else:
+                # 更新时间按钮状态
+                if hasattr(self, 'time_toggle_button'):
+                    self.time_toggle_button.config(text="⏰ 时间列")
+            
             # 获取搜索选项
             case_sensitive = self.case_var.get()
             use_regex = self.regex_var.get()
@@ -701,12 +1065,23 @@ class LogFilterApp:
         
         # 在结果列表中显示所有匹配的行
         for i, (line_num, line_content) in enumerate(self.filtered_results):
-            # 为listbox添加内容（保持兼容性）
-            display_text = f"[{line_num:4d}] {line_content[:80]}{'...' if len(line_content) > 80 else ''}"
-            self.result_listbox.insert(tk.END, display_text)
-            
-            # 为Text组件添加内容，添加行号以便点击识别
-            self.result_text.insert(tk.END, f"{display_text}\n")
+            if self.show_time_column and self.has_time_baseline:
+                # 只有在有TIME[0]基准时才显示计算的时间
+                time_info = self.calculate_time_info(line_content, line_num)
+                
+                # 为listbox添加内容（保持兼容性）
+                display_text = f"{time_info} [{line_num:4d}] {line_content[:50]}{'...' if len(line_content) > 50 else ''}"
+                self.result_listbox.insert(tk.END, display_text)
+                
+                # 为Text组件添加内容，添加行号以便点击识别
+                self.result_text.insert(tk.END, f"{display_text}\n")
+            else:
+                # 不显示时间信息或没有基准的原始格式
+                display_text = f"[{line_num:4d}] {line_content[:80]}{'...' if len(line_content) > 80 else ''}"
+                self.result_listbox.insert(tk.END, display_text)
+                
+                # 为Text组件添加内容，添加行号以便点击识别
+                self.result_text.insert(tk.END, f"{display_text}\n")
         
         # 高亮搜索结果中的关键字（在设置为只读之前）
         self.highlight_result_keywords()
@@ -727,14 +1102,20 @@ class LogFilterApp:
             if not hasattr(self, 'current_keywords') or not self.current_keywords:
                 return
             
-            # 获取搜索选项
-            case_sensitive = getattr(self, 'case_var', tk.BooleanVar()).get()
+            # 获取搜索选项 - 安全获取，避免在根窗口创建前出错
+            case_sensitive = False
+            try:
+                if hasattr(self, 'case_var') and self.case_var:
+                    case_sensitive = self.case_var.get()
+            except tk.TclError:
+                case_sensitive = False
             
             # 暂时设置为可编辑状态
             self.result_text.config(state=tk.NORMAL)
             
             # 清除之前的关键词高亮标签
-            for i in range(len(COLOR_LIST)):
+            color_list = self.get_highlight_colors()
+            for i in range(len(color_list)):
                 self.result_text.tag_remove(f"result_keyword_{i}", "1.0", tk.END)
             
             # 高亮每个关键词（使用不同颜色）
@@ -742,7 +1123,7 @@ class LogFilterApp:
                 if not keyword:
                     continue
                 
-                color_idx = keyword_idx % len(COLOR_LIST)
+                color_idx = keyword_idx % len(color_list)
                 tag_name = f"result_keyword_{keyword_idx}"
                 
                 start_pos = "1.0"
@@ -758,8 +1139,8 @@ class LogFilterApp:
                 
                 # 配置关键词高亮样式
                 self.result_text.tag_configure(tag_name, 
-                    background=COLOR_LIST[color_idx]['bg'], 
-                    foreground=COLOR_LIST[color_idx]['fg'])
+                    background=color_list[color_idx]['bg'], 
+                    foreground=color_list[color_idx]['fg'])
             
             # 恢复为只读状态
             self.result_text.config(state=tk.DISABLED)
@@ -775,7 +1156,17 @@ class LogFilterApp:
         pass
     
     def toggle_theme(self):
-        """切换主题"""
+        """切换主题 - 支持多种暗黑主题"""
+        # 定义主题循环顺序
+        theme_cycle = {
+            'light': 'dark',
+            'dark': 'vscode_dark', 
+            'vscode_dark': 'github_dark',
+            'github_dark': 'light',
+            'modern_light': 'modern_dark',
+            'modern_dark': 'modern_light'
+        }
+        
         # 支持超级现代化UI主题
         if ULTRA_MODERN_UI_AVAILABLE and hasattr(self, 'ui_enhancer'):
             if self.current_theme in ['light', 'modern_light']:
@@ -783,60 +1174,573 @@ class LogFilterApp:
             else:
                 self.current_theme = 'modern_light'
         else:
-            # 传统主题切换
-            self.current_theme = 'dark' if self.current_theme == 'light' else 'light'
+            # 多种主题循环切换
+            if self.current_theme in theme_cycle:
+                self.current_theme = theme_cycle[self.current_theme]
+            else:
+                self.current_theme = 'light'  # 默认回到浅色主题
         
         self.apply_theme()
+        
+        # 更新状态栏显示当前主题
+        theme_names = {
+            'light': '浅色主题',
+            'dark': '经典暗黑',
+            'vscode_dark': 'VS Code暗黑',
+            'github_dark': 'GitHub暗黑',
+            'modern_light': '现代浅色',
+            'modern_dark': '现代暗黑'
+        }
+        
+        current_name = theme_names.get(self.current_theme, self.current_theme)
+        if hasattr(self, 'status_label'):
+            original_text = self.status_label.cget('text')
+            # 如果状态栏显示的是主题信息，更新它；否则保持原文本
+            if '主题' in original_text or original_text == "就绪":
+                self.status_label.config(text=f"当前主题: {current_name}")
     
     def apply_theme(self):
-        """应用主题样式"""
+        """应用主题样式 - 增强版"""
         # 使用实例的themes属性，如果当前主题不存在则回退到全局THEMES
         if self.current_theme in self.themes:
             theme = self.themes[self.current_theme]
         else:
             theme = THEMES.get(self.current_theme, THEMES['light'])
         
-        # 更新主题切换按钮文本
+        # 如果有ultra_modern_ui，先同步更新它的颜色配置
+        if ULTRA_MODERN_UI_AVAILABLE and hasattr(self, 'ui_enhancer'):
+            try:
+                # 根据当前主题更新ultra_modern_ui的颜色
+                if self.current_theme in ['dark', 'vscode_dark', 'github_dark']:
+                    # 深色主题
+                    self.ui_enhancer.colors.update({
+                        'background': theme['bg'],
+                        'surface': theme.get('frame_bg', theme['bg']),
+                        'surface_variant': theme.get('entry_bg', theme['bg']),
+                        'text_primary': theme['text_fg'],
+                        'text_secondary': theme.get('text_secondary', theme['fg']),
+                        'primary': theme.get('accent', '#0078D4'),
+                        'primary_light': theme.get('accent', '#0078D4'),
+                        'primary_dark': theme.get('accent', '#0078D4'),
+                        'border': theme.get('border', '#404040'),
+                        'dark_background': theme['bg'],
+                        'dark_surface': theme.get('frame_bg', theme['bg']),
+                        'dark_text_primary': theme['text_fg'],
+                        'dark_text_secondary': theme.get('text_secondary', theme['fg']),
+                    })
+                else:
+                    # 浅色主题
+                    self.ui_enhancer.colors.update({
+                        'background': theme['bg'],
+                        'surface': theme.get('frame_bg', theme['bg']),
+                        'surface_variant': theme.get('entry_bg', theme['bg']),
+                        'text_primary': theme['text_fg'],
+                        'text_secondary': theme.get('text_secondary', theme['fg']),
+                        'primary': theme.get('accent', '#0078D4'),
+                        'primary_light': theme.get('accent', '#0078D4'),
+                        'primary_dark': theme.get('accent', '#0078D4'),
+                        'border': theme.get('border', '#E0E0E0'),
+                    })
+            except Exception as e:
+                print(f"Ultra Modern UI 颜色同步失败: {e}")
+        
+        # 更新主题切换按钮文本，显示更友好的信息
         if hasattr(self, 'theme_button'):
+            theme_icons = {
+                'light': '🌙',
+                'dark': '💻', 
+                'vscode_dark': '🐙',
+                'github_dark': '☀️',
+                'modern_light': '🌙',
+                'modern_dark': '☀️'
+            }
+            
+            theme_names = {
+                'light': '暗黑',
+                'dark': 'VS Code',
+                'vscode_dark': 'GitHub',
+                'github_dark': '浅色',
+                'modern_light': '暗黑',
+                'modern_dark': '浅色'
+            }
+            
             if ULTRA_MODERN_UI_AVAILABLE:
-                self.theme_button.config(text="☀️ 明亮" if self.current_theme == 'modern_dark' else "🌙 暗黑")
+                icon = "☀️" if self.current_theme == 'modern_dark' else "🌙"
+                text = "明亮" if self.current_theme == 'modern_dark' else "暗黑"
             else:
-                self.theme_button.config(text="☀️ 明亮" if self.current_theme == 'dark' else "🌙 暗黑")
+                icon = theme_icons.get(self.current_theme, '🌙')
+                text = theme_names.get(self.current_theme, '暗黑')
+            
+            self.theme_button.config(text=f"{icon} {text}")
         
         # 更新所有组件的主题
         for widget_type, widget in self.theme_widgets:
             try:
                 if widget_type == 'frame':
                     widget.config(bg=theme.get('frame_bg', theme['bg']))
+                    # 如果支持边框，设置边框样式
+                    if 'border' in theme:
+                        try:
+                            widget.config(
+                                highlightbackground=theme['border'],
+                                highlightthickness=0,
+                                relief='flat',
+                                bd=0
+                            )
+                        except:
+                            pass
+                            
                 elif widget_type == 'label':
-                    widget.config(bg=theme['bg'], fg=theme['fg'])
+                    widget.config(
+                        bg=theme.get('frame_bg', theme['bg']), 
+                        fg=theme['text_fg']
+                    )
+                    
                 elif widget_type == 'entry':
-                    widget.config(bg=theme['entry_bg'], fg=theme['entry_fg'], 
-                                insertbackground=theme['fg'])
+                    widget.config(
+                        bg=theme['entry_bg'], 
+                        fg=theme['entry_fg'],
+                        insertbackground=theme['entry_fg'],
+                        selectbackground=theme.get('accent', theme['select_bg']),
+                        selectforeground=theme.get('text_primary', '#FFFFFF'),
+                        highlightthickness=0,
+                        relief='flat',
+                        bd=0
+                    )
+                    # 设置边框
+                    if 'border' in theme:
+                        try:
+                            widget.config(highlightbackground=theme['border'])
+                        except:
+                            pass
+                            
                 elif widget_type == 'combobox':
                     # TTK Combobox需要使用style来设置主题
-                    style = ttk.Style()
-                    style.configure('TCombobox', 
-                                  fieldbackground=theme['entry_bg'],
-                                  background=theme['button_bg'],
-                                  foreground=theme['entry_fg'])
+                    try:
+                        style = ttk.Style()
+                        style.configure('TCombobox', 
+                                      fieldbackground=theme['entry_bg'],
+                                      background=theme['button_bg'],
+                                      foreground=theme['entry_fg'],
+                                      bordercolor=theme.get('border', '#E0E0E0'),
+                                      focuscolor=theme.get('accent', theme['select_bg']))
+                        # 下拉列表样式
+                        style.map('TCombobox',
+                                selectbackground=[('readonly', theme['entry_bg'])],
+                                selectforeground=[('readonly', theme['entry_fg'])])
+                    except Exception as e:
+                        print(f"Combobox样式设置失败: {e}")
+                        
                 elif widget_type == 'button':
-                    widget.config(bg=theme['button_bg'], fg=theme['button_fg'],
-                                activebackground=theme['button_active_bg'])
+                    widget.config(
+                        bg=theme['button_bg'], 
+                        fg=theme['button_fg'],
+                        activebackground=theme['button_active_bg'],
+                        activeforeground=theme['button_fg'],
+                        highlightthickness=0,
+                        relief='flat',
+                        bd=0
+                    )
+                    # 设置按钮边框
+                    if 'border' in theme:
+                        try:
+                            widget.config(highlightbackground=theme['border'])
+                        except:
+                            pass
+                            
                 elif widget_type == 'text':
-                    widget.config(bg=theme['text_bg'], fg=theme['text_fg'],
-                                selectbackground=theme['text_select_bg'],
-                                selectforeground=theme['select_fg'],
-                                insertbackground=theme['fg'])
+                    widget.config(
+                        bg=theme['text_bg'], 
+                        fg=theme['text_fg'],
+                        selectbackground=theme.get('accent', theme['text_select_bg']),
+                        selectforeground=theme.get('text_primary', '#FFFFFF'),
+                        insertbackground=theme['text_fg'],
+                        highlightthickness=0,
+                        relief='flat',
+                        bd=0
+                    )
+                    # 设置文本框边框
+                    if 'border' in theme:
+                        try:
+                            widget.config(highlightbackground=theme['border'])
+                        except:
+                            pass
+                            
                 elif widget_type == 'listbox':
-                    widget.config(bg=theme['text_bg'], fg=theme['text_fg'],
-                                selectbackground=theme['text_select_bg'],
-                                selectforeground=theme['select_fg'])
+                    widget.config(
+                        bg=theme['text_bg'], 
+                        fg=theme['text_fg'],
+                        selectbackground=theme.get('accent', theme['text_select_bg']),
+                        selectforeground=theme.get('text_primary', '#FFFFFF'),
+                        highlightthickness=0,
+                        relief='flat',
+                        bd=0
+                    )
+                    # 设置列表框边框
+                    if 'border' in theme:
+                        try:
+                            widget.config(highlightbackground=theme['border'])
+                        except:
+                            pass
+                            
             except Exception as e:
                 print(f"主题应用失败 {widget_type}: {e}")
         
         # 更新根窗口背景
         self.root.config(bg=theme['bg'])
+        
+        # 更新特殊组件样式
+        self.update_special_components_theme(theme)
+        
+        # 强制重新应用ultra_modern_ui样式（如果可用）
+        try:
+            if ULTRA_MODERN_UI_AVAILABLE and hasattr(self, 'ui_enhancer'):
+                # 调用ui_enhancer的样式应用方法
+                if hasattr(self.ui_enhancer, 'apply_styles'):
+                    self.ui_enhancer.apply_styles()
+                elif hasattr(self.ui_enhancer, 'apply_ultra_modern_theme'):
+                    self.ui_enhancer.apply_ultra_modern_theme()
+        except Exception as e:
+            print(f"Ultra Modern UI 样式重新应用失败: {e}")
+        
+        # 强制递归更新所有子组件的颜色
+        try:
+            self.force_update_all_widgets(self.root, theme)
+        except Exception as e:
+            print(f"强制更新组件失败: {e}")
+            
+        print(f"应用主题: {self.current_theme} (颜色已优化)")
+    
+    def update_special_components_theme(self, theme):
+        """更新特殊组件的主题样式"""
+        try:
+            # 更新状态栏样式
+            if hasattr(self, 'status_bar'):
+                self.status_bar.config(bg=theme.get('frame_bg', theme['bg']))
+            
+            # 更新状态栏标签样式
+            if hasattr(self, 'status_label'):
+                self.status_label.config(
+                    bg=theme.get('frame_bg', theme['bg']),
+                    fg=theme.get('text_secondary', theme['text_fg'])
+                )
+            
+            # 更新分割面板样式
+            if hasattr(self, 'paned_window'):
+                self.paned_window.config(
+                    bg=theme['bg'],
+                    sashrelief='flat',
+                    sashwidth=2
+                )
+            
+            # 更新选项框（Checkbutton和Radiobutton）样式  
+            for widget_type, widget in self.theme_widgets:
+                if widget_type in ['checkbutton', 'radiobutton']:
+                    try:
+                        widget.config(
+                            bg=theme.get('frame_bg', theme['bg']),
+                            fg=theme['text_fg'], 
+                            activebackground=theme.get('frame_bg', theme['bg']),
+                            activeforeground=theme['text_fg'],
+                            selectcolor=theme['entry_bg'],
+                            # 添加更好的视觉效果
+                            relief='flat',
+                            highlightthickness=0
+                        )
+                    except:
+                        pass
+            
+            # 更新所有标签样式，确保使用正确的背景色
+            for widget_type, widget in self.theme_widgets:
+                if widget_type == 'label':
+                    try:
+                        widget.config(
+                            bg=theme.get('frame_bg', theme['bg']),
+                            fg=theme['text_fg']
+                        )
+                    except:
+                        pass
+            
+            # 更新滚动条样式（如果存在）
+            try:
+                # 查找所有Scrollbar组件
+                def update_scrollbars(parent):
+                    for child in parent.winfo_children():
+                        if isinstance(child, tk.Scrollbar):
+                            child.config(
+                                bg=theme.get('frame_bg', theme['bg']),
+                                troughcolor=theme.get('frame_bg', theme['bg']),
+                                activebackground=theme.get('accent', '#0078D4'),
+                                highlightthickness=0
+                            )
+                        elif hasattr(child, 'winfo_children'):
+                            update_scrollbars(child)
+                
+                update_scrollbars(self.root)
+            except Exception as e:
+                print(f"滚动条样式更新失败: {e}")
+                        
+        except Exception as e:
+            print(f"特殊组件主题更新失败: {e}")
+            
+    def force_update_all_widgets(self, parent, theme):
+        """强制更新所有子组件的主题"""
+        try:
+            # 更新当前组件
+            widget_class = parent.__class__.__name__
+            
+            if widget_class == 'Tk' or widget_class == 'Toplevel':
+                parent.configure(bg=theme['bg'])
+            elif widget_class == 'Frame':
+                parent.configure(
+                    bg=theme.get('frame_bg', theme['bg']),
+                    highlightthickness=0,
+                    relief='flat',
+                    bd=0
+                )
+            elif widget_class == 'Label':
+                parent.configure(
+                    bg=theme.get('frame_bg', theme['bg']),
+                    fg=theme['text_fg'],
+                    highlightthickness=0
+                )
+            elif widget_class == 'Button':
+                parent.configure(
+                    bg=theme['button_bg'],
+                    fg=theme['button_fg'],
+                    activebackground=theme['button_active_bg'],
+                    activeforeground=theme['button_fg'],
+                    highlightthickness=0,
+                    relief='flat',
+                    bd=0
+                )
+            elif widget_class == 'Entry':
+                parent.configure(
+                    bg=theme['entry_bg'],
+                    fg=theme['entry_fg'],
+                    insertbackground=theme['entry_fg'],
+                    selectbackground=theme['accent'],
+                    selectforeground=theme['text_primary'],
+                    highlightthickness=0,
+                    relief='flat',
+                    bd=0
+                )
+            elif widget_class == 'Text':
+                parent.configure(
+                    bg=theme['text_bg'],
+                    fg=theme['text_fg'],
+                    selectbackground=theme['accent'],
+                    selectforeground=theme['text_primary'],
+                    insertbackground=theme['text_fg'],
+                    highlightthickness=0,
+                    relief='flat',
+                    bd=0
+                )
+            elif widget_class == 'Listbox':
+                parent.configure(
+                    bg=theme['text_bg'],
+                    fg=theme['text_fg'],
+                    selectbackground=theme['accent'],
+                    selectforeground=theme['text_primary'],
+                    highlightthickness=0,
+                    relief='flat',
+                    bd=0
+                )
+            elif widget_class == 'Scrollbar':
+                parent.configure(
+                    bg=theme.get('scrollbar_bg', theme['frame_bg']),
+                    troughcolor=theme.get('scrollbar_bg', theme['frame_bg']),
+                    activebackground=theme['accent'],
+                    highlightthickness=0
+                )
+            elif widget_class == 'PanedWindow':
+                parent.configure(
+                    bg=theme['bg'],
+                    sashrelief='flat',
+                    sashwidth=2
+                )
+                
+            # 递归更新所有子组件
+            for child in parent.winfo_children():
+                self.force_update_all_widgets(child, theme)
+                
+        except Exception as e:
+            # 忽略无法配置的组件，继续处理其他组件
+            pass
+    
+    def show_theme_menu(self):
+        """显示主题选择菜单"""
+        try:
+            # 创建弹出菜单
+            theme_menu = tk.Menu(self.root, tearoff=0)
+            
+            # 主题定义
+            available_themes = {
+                'light': '☀️ 经典浅色',
+                'dark': '🌙 经典暗黑', 
+                'vscode_dark': '💻 VS Code暗黑',
+                'github_dark': '🐙 GitHub暗黑'
+            }
+            
+            # 如果有现代化UI，添加现代主题
+            if ULTRA_MODERN_UI_AVAILABLE:
+                available_themes.update({
+                    'modern_light': '✨ 现代浅色',
+                    'modern_dark': '🌃 现代暗黑'
+                })
+            
+            # 添加主题选项
+            for theme_key, theme_name in available_themes.items():
+                # 当前主题显示勾选标记
+                display_name = f"{'✓ ' if self.current_theme == theme_key else '  '}{theme_name}"
+                
+                theme_menu.add_command(
+                    label=display_name,
+                    command=lambda t=theme_key: self.set_theme(t)
+                )
+            
+            # 添加分割线
+            theme_menu.add_separator()
+            
+            # 添加随机主题选项
+            theme_menu.add_command(
+                label="🎲 随机主题",
+                command=self.random_theme
+            )
+            
+            # 添加主题预览
+            theme_menu.add_command(
+                label="👀 主题预览",
+                command=self.show_theme_preview
+            )
+            
+            # 显示菜单
+            try:
+                # 获取按钮位置
+                x = self.theme_menu_button.winfo_rootx()
+                y = self.theme_menu_button.winfo_rooty() + self.theme_menu_button.winfo_height()
+                theme_menu.post(x, y)
+            except:
+                # 如果获取位置失败，在鼠标位置显示
+                theme_menu.tk_popup(self.root.winfo_pointerx(), self.root.winfo_pointery())
+                
+        except Exception as e:
+            print(f"显示主题菜单失败: {e}")
+    
+    def set_theme(self, theme_name):
+        """设置指定主题"""
+        try:
+            if theme_name in THEMES or (hasattr(self, 'themes') and theme_name in self.themes):
+                self.current_theme = theme_name
+                self.apply_theme()
+                
+                # 更新状态栏
+                theme_names = {
+                    'light': '经典浅色',
+                    'dark': '经典暗黑',
+                    'vscode_dark': 'VS Code暗黑',
+                    'github_dark': 'GitHub暗黑',
+                    'modern_light': '现代浅色',
+                    'modern_dark': '现代暗黑'
+                }
+                
+                current_name = theme_names.get(theme_name, theme_name)
+                if hasattr(self, 'status_label'):
+                    self.status_label.config(text=f"已切换到: {current_name}主题")
+                    
+                print(f"✅ 主题已切换为: {current_name}")
+            else:
+                print(f"❌ 未知主题: {theme_name}")
+                
+        except Exception as e:
+            print(f"设置主题失败: {e}")
+    
+    def random_theme(self):
+        """随机选择主题"""
+        try:
+            import random
+            
+            available_themes = ['light', 'dark', 'vscode_dark', 'github_dark']
+            if ULTRA_MODERN_UI_AVAILABLE:
+                available_themes.extend(['modern_light', 'modern_dark'])
+            
+            # 排除当前主题
+            available_themes = [t for t in available_themes if t != self.current_theme]
+            
+            if available_themes:
+                random_theme = random.choice(available_themes)
+                self.set_theme(random_theme)
+                
+        except Exception as e:
+            print(f"随机主题选择失败: {e}")
+    
+    def show_theme_preview(self):
+        """显示主题预览窗口"""
+        try:
+            preview_window = tk.Toplevel(self.root)
+            preview_window.title("🎨 主题预览")
+            preview_window.geometry("600x400")
+            preview_window.transient(self.root)
+            preview_window.grab_set()
+            
+            # 创建预览内容
+            preview_frame = tk.Frame(preview_window)
+            preview_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+            
+            tk.Label(preview_frame, text="主题预览", font=('Arial', 16, 'bold')).pack(pady=10)
+            
+            # 主题选择区域
+            theme_frame = tk.Frame(preview_frame)
+            theme_frame.pack(fill=tk.X, pady=10)
+            
+            themes_to_show = {
+                'light': '☀️ 经典浅色',
+                'dark': '🌙 经典暗黑',
+                'vscode_dark': '💻 VS Code暗黑', 
+                'github_dark': '🐙 GitHub暗黑'
+            }
+            
+            # 创建预览按钮
+            for i, (theme_key, theme_name) in enumerate(themes_to_show.items()):
+                btn_frame = tk.Frame(theme_frame)
+                btn_frame.pack(fill=tk.X, pady=2)
+                
+                # 预览按钮
+                preview_btn = tk.Button(btn_frame, text=f"预览 {theme_name}", 
+                                      command=lambda t=theme_key: self.preview_theme(t, preview_window))
+                preview_btn.pack(side=tk.LEFT, padx=(0, 5))
+                
+                # 应用按钮
+                apply_btn = tk.Button(btn_frame, text="应用", 
+                                    command=lambda t=theme_key: self.apply_and_close_preview(t, preview_window))
+                apply_btn.pack(side=tk.LEFT)
+            
+            # 关闭按钮
+            tk.Button(preview_frame, text="❌ 关闭", 
+                     command=preview_window.destroy).pack(pady=20)
+                     
+        except Exception as e:
+            print(f"显示主题预览失败: {e}")
+    
+    def preview_theme(self, theme_name, preview_window):
+        """预览主题（临时应用）"""
+        try:
+            old_theme = self.current_theme
+            self.set_theme(theme_name)
+            
+            # 1秒后恢复原主题
+            def restore_theme():
+                self.set_theme(old_theme)
+            
+            preview_window.after(1000, restore_theme)
+            
+        except Exception as e:
+            print(f"主题预览失败: {e}")
+    
+    def apply_and_close_preview(self, theme_name, preview_window):
+        """应用主题并关闭预览窗口"""
+        self.set_theme(theme_name)
+        preview_window.destroy()
     
     def get_current_theme(self):
         """获取当前主题配置"""
@@ -900,7 +1804,13 @@ class LogFilterApp:
         
         try:
             self.filtered_results = []
-            case_sensitive = getattr(self, 'case_var', tk.BooleanVar()).get()
+            # 安全获取搜索选项，避免在根窗口创建前出错
+            case_sensitive = False
+            try:
+                if hasattr(self, 'case_var') and self.case_var:
+                    case_sensitive = self.case_var.get()
+            except tk.TclError:
+                case_sensitive = False
             
             for i, line in enumerate(self.file_content):
                 line_content = line.strip()
@@ -1811,6 +2721,533 @@ class LogFilterApp:
             
         except Exception as e:
             print(f"右键菜单处理失败: {e}")
+    
+    def setup_drag_and_drop(self):
+        """设置真正的文件拖拽功能"""
+        try:
+            if DRAG_DROP_AVAILABLE:
+                # 真正的拖拽功能实现
+                self.setup_real_drag_drop()
+            else:
+                # 备用的增强文件访问功能
+                self.setup_enhanced_file_access()
+                
+        except Exception as e:
+            print(f"⚠️ 拖拽功能设置失败: {e}")
+            # 即使失败也提供基本的文件访问功能
+            self.setup_enhanced_file_access()
+    
+    def setup_real_drag_drop(self):
+        """设置真正的拖拽功能"""
+        try:
+            # 注册整个窗口为拖拽目标
+            self.root.drop_target_register(DND_FILES)
+            
+            # 绑定拖拽事件
+            self.root.dnd_bind('<<DropEnter>>', self.on_drag_enter)
+            self.root.dnd_bind('<<DropPosition>>', self.on_drag_over) 
+            self.root.dnd_bind('<<DropLeave>>', self.on_drag_leave)
+            self.root.dnd_bind('<<Drop>>', self.on_file_drop)
+            
+            # 添加拖拽提示
+            self.add_real_drag_hint()
+            
+            # 同时保留增强文件访问功能
+            self.setup_enhanced_file_access()
+            
+            print("✅ 真正的文件拖拽功能已启用！可以从文件管理器拖拽文件到窗口")
+            
+        except Exception as e:
+            print(f"真正拖拽设置失败: {e}")
+            # 回退到增强文件访问
+            self.setup_enhanced_file_access()
+    
+    def add_real_drag_hint(self):
+        """添加真正的拖拽提示"""
+        try:
+            # 在状态栏添加拖拽提示
+            if hasattr(self, 'status_label'):
+                original_text = self.status_label.cget('text')
+                if original_text == "就绪":
+                    self.status_label.config(text="💡 可以直接拖拽文件到窗口打开 | 就绪")
+            
+            # 在工具栏添加拖拽提示
+            drag_hint = tk.Label(self.toolbar, 
+                               text="💡 支持从文件管理器拖拽文件到此窗口", 
+                               font=('Arial', 8), fg='green')
+            drag_hint.pack(side=tk.RIGHT, padx=(10, 0))
+            
+            # 添加到主题组件列表
+            self.theme_widgets.append(('label', drag_hint))
+            
+        except Exception as e:
+            print(f"添加真正拖拽提示失败: {e}")
+    
+    def on_drag_enter(self, event):
+        """真正的拖拽进入处理"""
+        try:
+            # 改变窗口外观提示
+            self.root.config(bg='lightblue')
+            self.status_label.config(text="📁 检测到文件拖拽，释放以打开...")
+            print("📁 文件拖拽进入窗口")
+            
+        except Exception as e:
+            print(f"拖拽进入处理失败: {e}")
+    
+    def on_drag_over(self, event):
+        """真正的拖拽悬停处理"""
+        try:
+            # 持续显示拖拽状态
+            self.status_label.config(text="📁 释放文件以打开...")
+            
+        except Exception as e:
+            print(f"拖拽悬停处理失败: {e}")
+    
+    def on_drag_leave(self, event):
+        """真正的拖拽离开处理"""
+        try:
+            # 恢复窗口外观
+            current_theme = self.themes.get(self.current_theme, self.themes['light'])
+            self.root.config(bg=current_theme['bg'])
+            self.status_label.config(text="💡 可以直接拖拽文件到窗口打开 | 就绪")
+            print("📁 文件拖拽离开窗口")
+            
+        except Exception as e:
+            print(f"拖拽离开处理失败: {e}")
+    
+    def on_file_drop(self, event):
+        """真正的文件拖拽释放处理"""
+        try:
+            # 获取拖拽的文件列表
+            files = self.root.tk.splitlist(event.data)
+            print(f"📁 检测到拖拽文件: {files}")
+            
+            if files:
+                # 取第一个文件
+                file_path = files[0]
+                
+                # 检查文件是否存在
+                if os.path.exists(file_path):
+                    # 检查文件类型
+                    file_ext = os.path.splitext(file_path)[1].lower()
+                    supported_extensions = ['.log', '.txt', '.out', '.err', '.csv']
+                    
+                    if file_ext in supported_extensions or file_ext == '':
+                        # 直接加载支持的文件类型
+                        self.load_file(file_path)
+                        self.status_label.config(text=f"✅ 拖拽成功打开: {os.path.basename(file_path)}")
+                        print(f"✅ 拖拽文件加载成功: {file_path}")
+                    else:
+                        # 询问是否打开不确定的文件类型
+                        result = messagebox.askyesno("文件类型确认", 
+                                                   f"文件类型 '{file_ext}' 可能不是标准日志文件\n" +
+                                                   f"文件: {os.path.basename(file_path)}\n\n" +
+                                                   "是否仍要打开？")
+                        if result:
+                            self.load_file(file_path)
+                            self.status_label.config(text=f"✅ 拖拽成功打开: {os.path.basename(file_path)}")
+                            print(f"✅ 拖拽文件加载成功: {file_path}")
+                        else:
+                            self.status_label.config(text="❌ 拖拽取消")
+                else:
+                    messagebox.showerror("错误", f"文件不存在: {file_path}")
+                    self.status_label.config(text="❌ 拖拽文件不存在")
+            
+            # 恢复窗口外观
+            self.on_drag_leave(event)
+            
+        except Exception as e:
+            print(f"文件拖拽处理失败: {e}")
+            messagebox.showerror("错误", f"文件拖拽处理失败: {str(e)}")
+            self.on_drag_leave(event)
+    
+    def setup_enhanced_file_access(self):
+        """设置增强的文件访问功能"""
+        try:
+            # 1. 添加键盘快捷键
+            self.root.bind('<Control-o>', lambda e: self.open_file())
+            self.root.bind('<Control-O>', lambda e: self.open_file())
+            self.root.bind('<F3>', lambda e: self.quick_file_dialog())
+            
+            # 2. 添加最近文件功能
+            self.setup_recent_files()
+            
+            # 3. 增强的打开按钮
+            self.enhance_open_button()
+            
+            # 4. 添加快速访问提示
+            self.add_file_access_hints()
+            
+            # 5. 尝试简单的拖拽监听（如果可能）
+            self.try_simple_drag_support()
+            
+            print("✅ 增强文件访问功能已启用")
+            
+        except Exception as e:
+            print(f"增强文件访问设置失败: {e}")
+    
+    def try_simple_drag_support(self):
+        """尝试简单的拖拽支持"""
+        try:
+            # 绑定拖拽事件（如果系统支持）
+            self.root.bind('<Button-1>', self.check_for_drag_start, add=True)
+            
+            # 设置窗口接受拖放
+            try:
+                # Windows 特定的拖拽支持
+                import ctypes
+                from ctypes import wintypes
+                
+                # 获取窗口句柄
+                hwnd = self.root.winfo_id()
+                
+                # 尝试注册拖放
+                ole32 = ctypes.windll.ole32
+                ole32.OleInitialize(None)
+                
+                print("ℹ️ 已尝试启用Windows拖拽支持")
+                
+            except Exception:
+                print("ℹ️ Windows拖拽支持不可用，使用其他方案")
+                
+        except Exception as e:
+            print(f"简单拖拽尝试失败: {e}")
+    
+    def check_for_drag_start(self, event):
+        """检查是否为拖拽开始"""
+        # 这是一个占位函数，用于将来可能的拖拽实现
+        pass
+    
+    def setup_recent_files(self):
+        """设置最近文件功能"""
+        try:
+            # 最近文件存储
+            self.recent_files_file = "recent_files.json"
+            self.recent_files = []
+            self.max_recent_files = 5
+            
+            # 加载最近文件
+            self.load_recent_files()
+            
+            # 在菜单中添加最近文件选项
+            self.add_recent_files_menu()
+            
+        except Exception as e:
+            print(f"最近文件功能设置失败: {e}")
+    
+    def load_recent_files(self):
+        """加载最近文件列表"""
+        try:
+            if os.path.exists(self.recent_files_file):
+                with open(self.recent_files_file, 'r', encoding='utf-8') as f:
+                    self.recent_files = json.load(f)
+                print(f"📁 加载了 {len(self.recent_files)} 个最近文件")
+            else:
+                self.recent_files = []
+                
+        except Exception as e:
+            print(f"加载最近文件失败: {e}")
+            self.recent_files = []
+    
+    def save_recent_files(self):
+        """保存最近文件列表"""
+        try:
+            with open(self.recent_files_file, 'w', encoding='utf-8') as f:
+                json.dump(self.recent_files, f, ensure_ascii=False, indent=2)
+                
+        except Exception as e:
+            print(f"保存最近文件失败: {e}")
+    
+    def add_to_recent_files(self, file_path):
+        """添加文件到最近文件列表"""
+        try:
+            # 移除重复项
+            if file_path in self.recent_files:
+                self.recent_files.remove(file_path)
+            
+            # 添加到列表开头
+            self.recent_files.insert(0, file_path)
+            
+            # 限制列表长度
+            if len(self.recent_files) > self.max_recent_files:
+                self.recent_files = self.recent_files[:self.max_recent_files]
+            
+            # 保存到文件
+            self.save_recent_files()
+            
+            # 更新菜单
+            self.update_recent_files_menu()
+            
+        except Exception as e:
+            print(f"添加最近文件失败: {e}")
+    
+    def add_recent_files_menu(self):
+        """在工具栏添加最近文件下拉菜单"""
+        try:
+            # 创建最近文件按钮
+            self.recent_button = tk.Button(self.toolbar, text="� 最近文件", 
+                                         command=self.show_recent_files_menu)
+            self.recent_button.pack(side=tk.LEFT, padx=(0, 5))
+            
+            # 添加到主题组件列表
+            self.theme_widgets.append(('button', self.recent_button))
+            
+        except Exception as e:
+            print(f"添加最近文件菜单失败: {e}")
+    
+    def show_recent_files_menu(self):
+        """显示最近文件菜单"""
+        try:
+            # 创建弹出菜单
+            recent_menu = tk.Menu(self.root, tearoff=0)
+            
+            if self.recent_files:
+                for i, file_path in enumerate(self.recent_files):
+                    if os.path.exists(file_path):
+                        file_name = os.path.basename(file_path)
+                        # 限制显示长度
+                        display_name = file_name if len(file_name) <= 30 else file_name[:27] + "..."
+                        recent_menu.add_command(
+                            label=f"{i+1}. {display_name}",
+                            command=lambda fp=file_path: self.open_recent_file(fp)
+                        )
+                
+                recent_menu.add_separator()
+                recent_menu.add_command(label="🗑️ 清空最近文件", command=self.clear_recent_files)
+            else:
+                recent_menu.add_command(label="暂无最近文件", state="disabled")
+            
+            # 显示菜单
+            try:
+                recent_menu.post(self.recent_button.winfo_rootx(), 
+                               self.recent_button.winfo_rooty() + self.recent_button.winfo_height())
+            except:
+                recent_menu.post(self.root.winfo_pointerx(), self.root.winfo_pointery())
+                
+        except Exception as e:
+            print(f"显示最近文件菜单失败: {e}")
+    
+    def open_recent_file(self, file_path):
+        """打开最近文件"""
+        try:
+            if os.path.exists(file_path):
+                self.load_file(file_path)
+            else:
+                messagebox.showerror("错误", f"文件不存在: {file_path}")
+                # 从最近文件列表中移除
+                if file_path in self.recent_files:
+                    self.recent_files.remove(file_path)
+                    self.save_recent_files()
+                    
+        except Exception as e:
+            messagebox.showerror("错误", f"打开文件失败: {str(e)}")
+    
+    def clear_recent_files(self):
+        """清空最近文件列表"""
+        try:
+            result = messagebox.askyesno("确认", "确定要清空最近文件列表吗？")
+            if result:
+                self.recent_files = []
+                self.save_recent_files()
+                messagebox.showinfo("成功", "最近文件列表已清空")
+                
+        except Exception as e:
+            print(f"清空最近文件失败: {e}")
+    
+    def update_recent_files_menu(self):
+        """更新最近文件菜单显示"""
+        try:
+            # 更新按钮文本显示文件数量
+            count = len(self.recent_files)
+            if count > 0:
+                self.recent_button.config(text=f"📋 最近文件({count})")
+            else:
+                self.recent_button.config(text="� 最近文件")
+                
+        except Exception as e:
+            print(f"更新最近文件菜单失败: {e}")
+    
+    def enhance_open_button(self):
+        """增强打开按钮功能"""
+        try:
+            # 修改原有按钮，添加右键菜单
+            self.open_button.bind('<Button-3>', self.show_open_options_menu)
+            
+            # 更新按钮文本提示更多功能
+            original_text = self.open_button.cget('text')
+            self.open_button.config(text=f"{original_text} (Ctrl+O)")
+            
+        except Exception as e:
+            print(f"增强打开按钮失败: {e}")
+    
+    def show_open_options_menu(self, event):
+        """显示打开选项菜单"""
+        try:
+            # 创建右键菜单
+            open_menu = tk.Menu(self.root, tearoff=0)
+            
+            open_menu.add_command(label="📁 浏览选择文件 (Ctrl+O)", command=self.open_file)
+            open_menu.add_command(label="⚡ 快速打开 (F3)", command=self.quick_file_dialog)
+            open_menu.add_separator()
+            
+            if self.recent_files:
+                open_menu.add_command(label="📋 最近文件", command=self.show_recent_files_menu)
+            
+            open_menu.add_command(label="📂 打开文件夹", command=self.open_folder_dialog)
+            
+            # 显示菜单
+            open_menu.post(event.x_root, event.y_root)
+            
+        except Exception as e:
+            print(f"显示打开选项菜单失败: {e}")
+    
+    def quick_file_dialog(self):
+        """快速文件对话框"""
+        try:
+            # 记住上次打开的目录
+            initial_dir = getattr(self, 'last_directory', os.getcwd())
+            
+            file_path = filedialog.askopenfilename(
+                title="快速选择日志文件",
+                initialdir=initial_dir,
+                filetypes=[
+                    ("所有日志文件", "*.log;*.txt;*.out;*.err"),
+                    ("日志文件", "*.log"),
+                    ("文本文件", "*.txt"),
+                    ("输出文件", "*.out"),
+                    ("错误文件", "*.err"),
+                    ("所有文件", "*.*")
+                ]
+            )
+            
+            if file_path:
+                self.last_directory = os.path.dirname(file_path)
+                self.load_file(file_path)
+                
+        except Exception as e:
+            messagebox.showerror("错误", f"快速打开失败: {str(e)}")
+    
+    def open_folder_dialog(self):
+        """打开文件夹对话框"""
+        try:
+            folder_path = filedialog.askdirectory(title="选择包含日志文件的文件夹")
+            
+            if folder_path:
+                # 扫描文件夹中的日志文件
+                log_files = []
+                for ext in ['.log', '.txt', '.out', '.err']:
+                    for file in os.listdir(folder_path):
+                        if file.lower().endswith(ext):
+                            log_files.append(os.path.join(folder_path, file))
+                
+                if log_files:
+                    # 显示文件选择对话框
+                    self.show_folder_files_dialog(log_files)
+                else:
+                    messagebox.showinfo("信息", "所选文件夹中没有找到日志文件")
+                    
+        except Exception as e:
+            messagebox.showerror("错误", f"打开文件夹失败: {str(e)}")
+    
+    def show_folder_files_dialog(self, files):
+        """显示文件夹中的文件选择对话框"""
+        try:
+            # 创建文件选择窗口
+            file_window = tk.Toplevel(self.root)
+            file_window.title("选择文件")
+            file_window.geometry("500x300")
+            file_window.transient(self.root)
+            file_window.grab_set()
+            
+            # 文件列表
+            tk.Label(file_window, text="请选择要打开的文件:", font=('Arial', 10, 'bold')).pack(pady=5)
+            
+            listbox = tk.Listbox(file_window, height=12)
+            listbox.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
+            
+            # 添加文件到列表
+            for file_path in files:
+                file_name = os.path.basename(file_path)
+                file_size = os.path.getsize(file_path) / 1024  # KB
+                listbox.insert(tk.END, f"{file_name} ({file_size:.1f} KB)")
+            
+            # 按钮框架
+            button_frame = tk.Frame(file_window)
+            button_frame.pack(pady=10)
+            
+            def open_selected():
+                selection = listbox.curselection()
+                if selection:
+                    file_path = files[selection[0]]
+                    file_window.destroy()
+                    self.load_file(file_path)
+                else:
+                    messagebox.showwarning("警告", "请选择一个文件")
+            
+            tk.Button(button_frame, text="打开", command=open_selected).pack(side=tk.LEFT, padx=5)
+            tk.Button(button_frame, text="取消", command=file_window.destroy).pack(side=tk.LEFT, padx=5)
+            
+            # 双击打开
+            listbox.bind('<Double-Button-1>', lambda e: open_selected())
+            
+        except Exception as e:
+            print(f"显示文件选择对话框失败: {e}")
+    
+    def add_file_access_hints(self):
+        """添加文件访问提示"""
+        try:
+            # 在工具栏添加快捷键提示
+            hints_label = tk.Label(self.toolbar, 
+                                 text="💡 Ctrl+O:打开文件 | F3:快速选择", 
+                                 font=('Arial', 8), fg='gray')
+            hints_label.pack(side=tk.RIGHT, padx=(10, 0))
+            
+            # 添加到主题组件列表
+            self.theme_widgets.append(('label', hints_label))
+            
+        except Exception as e:
+            print(f"添加文件访问提示失败: {e}")
+    
+    def load_file(self, file_path):
+        """统一的文件加载方法"""
+        try:
+            # 检查文件是否存在
+            if not os.path.exists(file_path):
+                messagebox.showerror("错误", f"文件不存在: {file_path}")
+                return
+            
+            # 保存当前文件路径
+            self.current_file_path = file_path
+            
+            # 读取文件内容
+            with open(file_path, 'r', encoding='utf-8', errors='ignore') as file:
+                self.file_content = file.readlines()
+            
+            # 添加到最近文件
+            self.add_to_recent_files(file_path)
+            
+            # 更新状态
+            file_name = os.path.basename(file_path)
+            self.status_label.config(text=f"✅ 已加载: {file_name} ({len(self.file_content)} 行)")
+            
+            # 清空搜索结果和上下文显示（保持搜索功能不变）
+            self.result_listbox.delete(0, tk.END)
+            self.result_text.config(state=tk.NORMAL)
+            self.result_text.delete(1.0, tk.END)
+            self.context_text.delete(1.0, tk.END)
+            
+            # 显示提示信息
+            welcome_msg = f"📁 已成功加载文件: {file_name}\n💡 请输入关键字进行搜索..."
+            self.result_listbox.insert(tk.END, welcome_msg)
+            self.result_text.insert(tk.END, welcome_msg)
+            self.context_text.insert(tk.END, welcome_msg)
+            self.result_text.config(state=tk.DISABLED)
+            
+            print(f"✅ 文件加载成功: {file_path}")
+            
+        except Exception as e:
+            print(f"文件加载失败: {e}")
+            messagebox.showerror("错误", f"加载文件失败: {str(e)}")
 
 def main():
     """主函数"""
