@@ -211,7 +211,7 @@ class LogFilterApp:
         self.bookmarks = []  # 书签列表
         
         # 上下文相关变量
-        self.context_range = 2  # 默认上下文范围
+        self.context_range = 2000  # 默认上下文范围
         self.context_results = []  # 存储带上下文的结果
         self.selected_line_index = None  # 当前选中的行索引
         
@@ -227,12 +227,12 @@ class LogFilterApp:
         self.show_time_column = True  # 是否显示时间列
         self.has_time_baseline = False  # 是否找到TIME[0]基准行
         
-        # 初始化主题 - 强制使用深色主题确保界面统一
-        self.current_theme = 'modern_dark' if ULTRA_MODERN_UI_AVAILABLE else 'dark'
+        # 初始化主题 - 默认使用经典浅色主题
+        self.current_theme = 'light'
         self.themes = THEMES.copy()
         
-        # 立即设置窗口为深色背景
-        self.root.configure(bg='#1E1E1E')
+        # 立即设置窗口为浅色背景
+        self.root.configure(bg='#FFFFFF')
         
         # 存储需要更新主题的组件
         self.theme_widgets = []
@@ -368,7 +368,7 @@ class LogFilterApp:
         tk.Label(self.search_frame, text="上下文:").pack(side=tk.LEFT, padx=(10, 0))
         
         self.context_var = tk.StringVar(value=str(self.context_range))
-        self.context_spinbox = tk.Spinbox(self.search_frame, from_=0, to=20, width=5, 
+        self.context_spinbox = tk.Spinbox(self.search_frame, from_=0, to=5000, width=6, 
                                          textvariable=self.context_var,
                                          command=self.update_context_range)
         self.context_spinbox.pack(side=tk.LEFT, padx=(5, 5))
@@ -1070,14 +1070,14 @@ class LogFilterApp:
                 time_info = self.calculate_time_info(line_content, line_num)
                 
                 # 为listbox添加内容（保持兼容性）
-                display_text = f"{time_info} [{line_num:4d}] {line_content[:50]}{'...' if len(line_content) > 50 else ''}"
+                display_text = f"{time_info} [{line_num:4d}] {line_content[:200]}{'...' if len(line_content) > 200 else ''}"
                 self.result_listbox.insert(tk.END, display_text)
                 
                 # 为Text组件添加内容，添加行号以便点击识别
                 self.result_text.insert(tk.END, f"{display_text}\n")
             else:
                 # 不显示时间信息或没有基准的原始格式
-                display_text = f"[{line_num:4d}] {line_content[:80]}{'...' if len(line_content) > 80 else ''}"
+                display_text = f"[{line_num:4d}] {line_content[:200]}{'...' if len(line_content) > 200 else ''}"
                 self.result_listbox.insert(tk.END, display_text)
                 
                 # 为Text组件添加内容，添加行号以便点击识别
