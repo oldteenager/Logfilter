@@ -91,25 +91,28 @@ DARK_COLOR_LIST = [
 THEMES = {
     'light': {
         'bg': '#FFFFFF',
-        'fg': '#000000',
+        'fg': '#1F1F1F',
         'select_bg': '#0078D4',
         'select_fg': '#FFFFFF',
         'entry_bg': '#FFFFFF',
-        'entry_fg': '#000000',
+        'entry_fg': '#1F1F1F',
         'text_bg': '#FFFFFF',
-        'text_fg': '#000000',
+        'text_fg': '#1F1F1F',
         'text_select_bg': '#316AC5',
-        'button_bg': '#E1E1E1',
-        'button_fg': '#000000',
-        'button_active_bg': '#CCCCCC',
-        'frame_bg': '#F0F0F0',
+        'text_primary': '#FFFFFF',
+        'text_secondary': '#5A5A5A',
+        'button_bg': '#F3F3F3',
+        'button_fg': '#1F1F1F',
+        'button_active_bg': '#E5E5E5',
+        'frame_bg': '#FFFFFF',
         'scrollbar_bg': '#F0F0F0',
         'scrollbar_fg': '#C0C0C0',
         'border': '#E0E0E0',
         'border_focus': '#0078D4',
-        'status_bg': '#F5F5F5',
+        'accent': '#0078D4',
+        'status_bg': '#FFFFFF',
         'tooltip_bg': '#FFFFCC',
-        'tooltip_fg': '#000000',
+        'tooltip_fg': '#1F1F1F',
     },
     'dark': {
         'bg': '#1E1E1E',              # 主背景 - 深灰色
@@ -147,6 +150,8 @@ THEMES = {
         'text_bg': '#1E1E1E',
         'text_fg': '#D4D4D4',
         'text_select_bg': '#0078D4',  # 统一选择色
+        'text_primary': '#FFFFFF',
+        'text_secondary': '#B0B0B0',
         'button_bg': '#37373D',  # VS Code按钮色
         'button_fg': '#E6E6E6',
         'button_active_bg': '#505050',
@@ -155,7 +160,8 @@ THEMES = {
         'scrollbar_fg': '#666666',
         'border': '#3C3C3C',
         'border_focus': '#0078D4',  # 统一焦点色
-        'status_bg': '#0078D4',  # VS Code状态栏色
+        'accent': '#0078D4',
+        'status_bg': '#252526',
         'tooltip_bg': '#252526',
         'tooltip_fg': '#E6E6E6',
     },
@@ -170,6 +176,8 @@ THEMES = {
         'text_bg': '#0D1117',
         'text_fg': '#E6EDF3',  # 稍微柔和的文字色
         'text_select_bg': '#1F6FEB',
+        'text_primary': '#FFFFFF',
+        'text_secondary': '#8B949E',
         'button_bg': '#21262D',  # 更统一的按钮背景
         'button_fg': '#F0F6FC',
         'button_active_bg': '#30363D',
@@ -178,6 +186,7 @@ THEMES = {
         'scrollbar_fg': '#6E7681',
         'border': '#30363D',
         'border_focus': '#1F6FEB',
+        'accent': '#1F6FEB',
         'status_bg': '#161B22',  # 更深的状态栏
         'tooltip_bg': '#161B22',
         'tooltip_fg': '#F0F6FC',
@@ -226,6 +235,8 @@ class LogFilterApp:
         self.base_datetime = None   # 基准完整时间 (如 2025/07/22 19:15:02)
         self.show_time_column = True  # 是否显示时间列
         self.has_time_baseline = False  # 是否找到TIME[0]基准行
+        # 时间基准列表: [(line_idx, base_ts, base_dt), ...] - 支持多个TIME[0]校时点
+        self.time_baselines = []
         
         # 初始化主题 - 默认使用经典浅色主题
         self.current_theme = 'light'
@@ -243,6 +254,9 @@ class LogFilterApp:
         
         # 启用文件拖拽功能
         self.setup_drag_and_drop()
+
+        # 绑定全局快捷键（Ctrl+F / F5 / Ctrl+Up/Down / Esc）
+        self.bind_global_shortcuts()
         
         # 应用超级现代化UI增强（优先级最高）
         try:
@@ -363,6 +377,10 @@ class LogFilterApp:
         # 搜索按钮
         self.search_button = tk.Button(self.search_frame, text="🔍 搜索", command=self.filter_logs)
         self.search_button.pack(side=tk.LEFT, padx=(0, 5))
+
+        # 清除按钮 - 一键清空关键字与筛选结果
+        self.clear_button = tk.Button(self.search_frame, text="✖ 清除", command=self.clear_search)
+        self.clear_button.pack(side=tk.LEFT, padx=(0, 5))
         
         # 上下文范围控制
         tk.Label(self.search_frame, text="上下文:").pack(side=tk.LEFT, padx=(10, 0))
@@ -465,6 +483,7 @@ class LogFilterApp:
             ('frame', self.search_frame),
             ('combobox', self.keyword_combobox),
             ('button', self.search_button),
+            ('button', self.clear_button),
             ('frame', self.options_frame),
             ('checkbutton', self.case_check),
             ('checkbutton', self.regex_check),
@@ -509,130 +528,100 @@ class LogFilterApp:
             index = selection[0]
             self.selected_line_index = index
             self.show_context(index)
+            if hasattr(self, 'status_label') and self.filtered_results:
+                self.status_label.config(text=f"匹配 {index + 1}/{len(self.filtered_results)}")
     
     def show_context(self, result_index, preserve_view=False):
-        """显示选中结果的上下文 - 支持保持视图位置"""
+        """显示选中结果的上下文 - 优化：右侧每行都严格用左侧当前选中行的完整日期时间+时间戳差值推算，强制显示完整日期时间格式"""
         if not self.filtered_results or result_index >= len(self.filtered_results):
             return
-        
+
         line_num, _ = self.filtered_results[result_index]
-        
-        # 如果需要保持视图，先保存当前滚动位置和光标位置
+
+        # 保存视图位置
         current_scroll_fraction = None
         target_line_relative_pos = None
-        
         if preserve_view:
             try:
-                # 保存当前滚动位置（相对于总内容的比例）
                 scroll_info = self.context_text.yview()
                 current_scroll_fraction = scroll_info[0]
-                
-                # 查找当前目标行在视图中的相对位置
                 content = self.context_text.get(1.0, tk.END)
                 lines = content.split('\n')
                 total_lines = len([l for l in lines if l.strip()])
-                
                 for i, line in enumerate(lines):
                     if line.startswith('>>>'):
                         target_line_relative_pos = i / max(1, total_lines - 1)
                         break
-                        
             except Exception as e:
                 print(f"保存视图状态失败: {e}")
-        
+
         # 计算上下文范围
         start_line = max(0, line_num - 1 - self.context_range)
         end_line = min(len(self.file_content), line_num + self.context_range)
-        
+
+        # 获取左侧当前选中行的原始日志行号、数字时间戳、完整日期时间
+
+        # 使用预扫描的基准列表，支持前向/后向最近基准查找
+        # 若 current_left_log_line_idx 存在则以其为锚点；否则以当前目标行为锚点
+        if hasattr(self, 'current_left_log_line_idx') and self.current_left_log_line_idx is not None:
+            anchor_idx = self.current_left_log_line_idx
+        else:
+            anchor_idx = line_num - 1
+
+        base_ts, base_dt, base_idx = None, None, None
+        anchor_base = self._get_baseline_for_line_idx(anchor_idx) if hasattr(self, '_get_baseline_for_line_idx') else None
+        if anchor_base is not None:
+            base_idx, base_ts, base_dt = anchor_base
+        else:
+            # 兜底：尝试解析锚点行本身
+            if 0 <= anchor_idx < len(self.file_content):
+                ts, dt, _, _ = self.parse_log_timestamp(self.file_content[anchor_idx].rstrip())
+                base_ts, base_dt, base_idx = ts, dt, anchor_idx
+        debug_info = f"[调试] result_index={result_index}, line_num={line_num}, anchor_idx={anchor_idx}, base_idx={base_idx}, base_ts={base_ts}, base_dt={base_dt}"
+        print(debug_info)
+
         # 清空上下文显示区域
         self.context_text.delete(1.0, tk.END)
-        
-        # 显示上下文
-        target_line_index = None  # 记录目标行在新内容中的位置
+        target_line_index = None
         context_lines = []
-        
-        # 重置时间基准用于上下文显示
-        context_base_timestamp = None
-        context_base_datetime = None
-        
         for i in range(start_line, end_line):
             line_content = self.file_content[i].rstrip()
             line_number = i + 1
-            
-            if self.show_time_column and self.has_time_baseline:
-                # 只有在有TIME[0]基准时才显示计算的时间
-                timestamp_float, datetime_obj, has_time_info, is_time_baseline = self.parse_log_timestamp(line_content)
-                
-                # 设置上下文的时间基准（每个TIME[0]都是新的校时点）
-                if is_time_baseline and timestamp_float is not None:
-                    context_base_timestamp = timestamp_float
-                    context_base_datetime = datetime_obj
-                
-                # 计算时间显示
+            ts, _, _, _ = self.parse_log_timestamp(line_content)
+            # 每行使用该行对应的最近基准进行推算（支持多个 TIME[0]）
+            line_base = self._get_baseline_for_line_idx(i) if hasattr(self, '_get_baseline_for_line_idx') else None
+            if line_base is None and base_dt is not None and base_ts is not None:
+                line_base = (base_idx, base_ts, base_dt)
+            if not self.show_time_column:
                 time_display = ""
-                if has_time_info:
-                    if is_time_baseline:
-                        # TIME[0]基准行
-                        if datetime_obj:
-                            time_display = f"[{datetime_obj.strftime('%Y/%m/%d %H:%M:%S')}] (基准) "
-                        else:
-                            time_display = f"[{timestamp_float:07.3f}] (基准) "
-                    elif context_base_timestamp is not None and timestamp_float is not None and datetime_obj is None:
-                        # 有基准且当前行只有时间戳的情况，计算相对时间
-                        try:
-                            from datetime import timedelta
-                            time_diff_seconds = timestamp_float - context_base_timestamp
-                            if context_base_datetime:
-                                new_datetime = context_base_datetime + timedelta(seconds=time_diff_seconds)
-                                time_display = f"[{new_datetime.strftime('%Y/%m/%d %H:%M:%S')}] "
-                            else:
-                                time_display = f"[{timestamp_float:07.3f}] "
-                        except:
-                            time_display = f"[{timestamp_float:07.3f}] "
-                    elif datetime_obj is not None:
-                        # 直接有完整时间的行
-                        time_display = f"[{datetime_obj.strftime('%Y/%m/%d %H:%M:%S')}] "
-                    elif timestamp_float is not None:
-                        # 只有时间戳的行
-                        time_display = f"[{timestamp_float:07.3f}] "
-                    else:
-                        time_display = "[---.---] "
-                else:
+            elif line_base is not None and ts is not None:
+                from datetime import timedelta
+                try:
+                    _, lb_ts, lb_dt = line_base
+                    new_datetime = lb_dt + timedelta(seconds=(ts - lb_ts))
+                    time_display = f"[{new_datetime.strftime('%Y/%m/%d %H:%M:%S')}] "
+                except Exception:
                     time_display = "[---.---] "
-                
-                # 标记目标行
-                if line_number == line_num:
-                    line_display = f">>> {time_display}[{line_number:4d}] {line_content}\n"
-                    target_line_index = len(context_lines) + 1  # 在新内容中的行号（1-based）
-                else:
-                    line_display = f"    {time_display}[{line_number:4d}] {line_content}\n"
             else:
-                # 不显示时间信息的原始格式
-                if line_number == line_num:
-                    line_display = f">>> [{line_number:4d}] {line_content}\n"
-                    target_line_index = len(context_lines) + 1  # 在新内容中的行号（1-based）
-                else:
-                    line_display = f"    [{line_number:4d}] {line_content}\n"
-            
+                time_display = "[---.---] "
+            if line_number == line_num:
+                line_display = f">>> {time_display}[{line_number:4d}] {line_content}\n"
+                target_line_index = len(context_lines) + 1
+            else:
+                line_display = f"    {time_display}[{line_number:4d}] {line_content}\n"
             context_lines.append(line_display)
             self.context_text.insert(tk.END, line_display)
-        
-        # 高亮关键字
+
         self.highlight_context_keywords()
-        
-        # 如果需要保持视图位置，尝试智能恢复
+
+        # 恢复视图位置
         if preserve_view and target_line_index:
             try:
-                self.context_text.update_idletasks()  # 确保内容已经渲染
-                
+                self.context_text.update_idletasks()
                 new_total_lines = len(context_lines)
                 if new_total_lines > 1:
-                    # 计算目标行在新内容中的相对位置
                     new_target_relative_pos = (target_line_index - 1) / max(1, new_total_lines - 1)
-                    
-                    # 如果有之前的目标行位置信息，尝试保持相同的相对位置
                     if target_line_relative_pos is not None:
-                        # 计算滚动偏移，让目标行保持在视图中相似的位置
                         visible_height = self.context_text.winfo_height()
                         line_height = self.context_text.dlineinfo("1.0")
                         if line_height:
@@ -641,21 +630,16 @@ class LogFilterApp:
                             desired_scroll_top = max(0, (target_line_index - target_view_position) / new_total_lines)
                             self.context_text.yview_moveto(desired_scroll_top)
                         else:
-                            # 如果无法计算行高，使用简单策略
                             scroll_pos = max(0, new_target_relative_pos - 0.3)
                             self.context_text.yview_moveto(scroll_pos)
                     else:
-                        # 没有之前的位置信息，让目标行居中
                         scroll_pos = max(0, new_target_relative_pos - 0.4)
                         self.context_text.yview_moveto(scroll_pos)
-                
             except Exception as e:
                 print(f"恢复视图位置失败: {e}")
-                # 如果恢复失败，至少确保目标行可见
                 if target_line_index:
                     self.context_text.see(f"{target_line_index}.0")
         else:
-            # 不需要保持视图，正常滚动到目标行
             if target_line_index:
                 self.context_text.see(f"{target_line_index}.0")
     
@@ -796,59 +780,83 @@ class LogFilterApp:
     def calculate_time_info(self, line_content, line_num):
         """计算时间信息，返回用于显示的时间字符串
         显示格式: [2025/07/22 19:14:22]
-        支持多个TIME[0]校时点
+        使用预扫描的基准列表，自动选择最近的基准（前向或后向）。
         """
         try:
             timestamp_float, datetime_obj, has_time_info, is_time_baseline = self.parse_log_timestamp(line_content)
-            
+
             if not has_time_info:
-                return "[---.---]"  # 无时间信息
-            
-            # 如果这是TIME[0]基准行，总是更新基准（支持多次校时）
-            if is_time_baseline:
-                # 更新基准时间（每个TIME[0]都重新设置基准）
-                self.base_timestamp = timestamp_float
-                self.base_datetime = datetime_obj
-                self.has_time_baseline = True
-                
-                if datetime_obj:
-                    return f"[{datetime_obj.strftime('%Y/%m/%d %H:%M:%S')}] (基准)"
-                else:
-                    return f"[{timestamp_float:07.3f}] (基准)"
-            
-            # 只有找到TIME[0]基准行后才显示完整时间功能
-            if not self.has_time_baseline:
-                # 如果还没找到基准，只显示原始时间戳
-                if timestamp_float is not None:
-                    return f"[{timestamp_float:07.3f}]"
-                elif datetime_obj is not None:
-                    return f"[{datetime_obj.strftime('%Y/%m/%d %H:%M:%S')}]"
-                else:
-                    return "[---.---]"
-            
-            # 已有基准的情况下，计算相对时间并以完整日期时间格式显示
-            if timestamp_float is not None and self.base_timestamp is not None and self.base_datetime is not None:
-                time_diff_seconds = timestamp_float - self.base_timestamp
-                
-                # 计算基于基准时间的新时间
+                return "[---.---]"
+
+            # 如果本行就是 TIME[0]
+            if is_time_baseline and datetime_obj is not None:
+                return f"[{datetime_obj.strftime('%Y/%m/%d %H:%M:%S')}] (基准)"
+
+            # 通过预扫描的基准推算
+            base = self._get_baseline_for_line_idx(line_num - 1)
+            if base is not None and timestamp_float is not None:
                 try:
                     from datetime import timedelta
-                    new_datetime = self.base_datetime + timedelta(seconds=time_diff_seconds)
-                    # 使用完整的日期时间格式，符合用户要求
-                    return f"[{new_datetime.strftime('%Y/%m/%d %H:%M:%S')}]"
+                    _, base_ts, base_dt = base
+                    new_dt = base_dt + timedelta(seconds=(timestamp_float - base_ts))
+                    return f"[{new_dt.strftime('%Y/%m/%d %H:%M:%S')}]"
                 except Exception as e:
                     print(f"时间计算失败: {e}")
-                    return f"[{timestamp_float:07.3f}]"
-            
-            # 如果只有完整时间信息，直接显示
+
+            # 退化情况：只有完整时间
             if datetime_obj is not None:
                 return f"[{datetime_obj.strftime('%Y/%m/%d %H:%M:%S')}]"
-            
+            if timestamp_float is not None:
+                return f"[{timestamp_float:07.3f}]"
+
             return "[---.---]"
-            
+
         except Exception as e:
             print(f"时间计算失败: {e}")
             return "[---.---]"
+
+    def _build_time_baselines(self):
+        """预扫描整个文件，构建所有 TIME[0] 基准列表。
+        结果存入 self.time_baselines = [(line_idx, base_ts, base_dt), ...] (按 line_idx 升序)
+        """
+        self.time_baselines = []
+        try:
+            for idx, line in enumerate(self.file_content or []):
+                if "TIME[0]" not in line:
+                    continue
+                ts, dt, _, is_base = self.parse_log_timestamp(line)
+                if is_base and ts is not None and dt is not None:
+                    self.time_baselines.append((idx, ts, dt))
+
+            self.has_time_baseline = len(self.time_baselines) > 0
+            if self.has_time_baseline:
+                # 同时设置首个基准，以保持对旧代码的兼容
+                self.base_timestamp = self.time_baselines[0][1]
+                self.base_datetime = self.time_baselines[0][2]
+                print(f"🕐 已构建 {len(self.time_baselines)} 个 TIME[0] 基准点")
+            else:
+                self.base_timestamp = None
+                self.base_datetime = None
+                print("⚠️ 文件中未找到 TIME[0] 基准行")
+        except Exception as e:
+            print(f"构建时间基准失败: {e}")
+
+    def _get_baseline_for_line_idx(self, line_idx):
+        """为给定的行索引（0-based）返回最合适的基准。
+        优先返回行之前的最近基准；若不存在则返回行之后的最近基准；都没有返回 None。
+        返回 (baseline_line_idx, base_ts, base_dt) 或 None。
+        """
+        if not self.time_baselines:
+            return None
+        prev_base = None
+        next_base = None
+        for b in self.time_baselines:
+            if b[0] <= line_idx:
+                prev_base = b
+            else:
+                next_base = b
+                break
+        return prev_base if prev_base is not None else next_base
     
     def reset_time_baseline(self):
         """重置时间基准"""
@@ -931,32 +939,12 @@ class LogFilterApp:
             return
         
         try:
-            # 重置时间基准
-            self.reset_time_baseline()
-            
-            # 检查文件中是否包含TIME[0]关键词，如果包含则预先扫描设置时间基准
-            has_time_keyword = False
-            for line in self.file_content:
-                if "TIME[0]" in line:
-                    has_time_keyword = True
-                    # 设置时间基准
-                    timestamp_float, datetime_obj, has_time_info, is_time_baseline = self.parse_log_timestamp(line)
-                    if is_time_baseline and datetime_obj:
-                        self.base_timestamp = timestamp_float
-                        self.base_datetime = datetime_obj
-                        self.has_time_baseline = True
-                        print(f"🕐 找到TIME[0]基准行，设置基准时间: {datetime_obj}")
-                        break
-            
-            if not has_time_keyword:
-                print("⚠️ 文件中未找到TIME[0]关键词，时间功能将不可用")
-                # 更新时间按钮状态
-                if hasattr(self, 'time_toggle_button'):
-                    self.time_toggle_button.config(text="⏰ 时间列 (无基准)")
-            else:
-                # 更新时间按钮状态
-                if hasattr(self, 'time_toggle_button'):
+            # 时间基准已在 load_file 中预扫描构建；这里仅更新按钮提示
+            if hasattr(self, 'time_toggle_button'):
+                if self.has_time_baseline:
                     self.time_toggle_button.config(text="⏰ 时间列")
+                else:
+                    self.time_toggle_button.config(text="⏰ 时间列 (无基准)")
             
             # 获取搜索选项
             case_sensitive = self.case_var.get()
@@ -1033,7 +1021,80 @@ class LogFilterApp:
             
         except Exception as e:
             messagebox.showerror("错误", f"筛选失败: {str(e)}")
-    
+
+    def clear_search(self):
+        """清空关键字与筛选结果（保留已加载文件）"""
+        try:
+            placeholder_text = "输入关键字，多个关键字用逗号分隔"
+            self.keyword_combobox.set(placeholder_text)
+            try:
+                self.keyword_combobox.config(foreground='gray')
+            except Exception:
+                pass
+            self.filtered_results = []
+            self.current_keywords = []
+            self.selected_line_index = None
+            self.result_listbox.delete(0, tk.END)
+            self.result_text.config(state=tk.NORMAL)
+            self.result_text.delete(1.0, tk.END)
+            self.result_text.config(state=tk.DISABLED)
+            self.context_text.delete(1.0, tk.END)
+            if hasattr(self, 'status_label'):
+                self.status_label.config(text="已清空搜索")
+        except Exception as e:
+            print(f"清空搜索失败: {e}")
+
+    def navigate_result(self, direction):
+        """在搜索结果中导航（direction: +1 下一条, -1 上一条）"""
+        try:
+            if not self.filtered_results:
+                return
+            total = len(self.filtered_results)
+            current = self.selected_line_index if self.selected_line_index is not None else -1
+            new_idx = (current + direction) % total
+            self.selected_line_index = new_idx
+            # 同步 Listbox 选择
+            try:
+                self.result_listbox.selection_clear(0, tk.END)
+                self.result_listbox.selection_set(new_idx)
+                self.result_listbox.see(new_idx)
+            except Exception:
+                pass
+            self.show_context(new_idx)
+            self.highlight_selected_result_line(new_idx)
+            # 自动滚动 result_text 到选中行
+            try:
+                actual_line = new_idx + 3
+                self.result_text.see(f"{actual_line}.0")
+            except Exception:
+                pass
+            if hasattr(self, 'status_label'):
+                self.status_label.config(text=f"匹配 {new_idx + 1}/{total}")
+        except Exception as e:
+            print(f"结果导航失败: {e}")
+
+    def bind_global_shortcuts(self):
+        """绑定常用全局快捷键。"""
+        try:
+            self.root.bind('<Control-f>', lambda e: (self.keyword_combobox.focus_set(), 'break'))
+            self.root.bind('<Control-F>', lambda e: (self.keyword_combobox.focus_set(), 'break'))
+            self.root.bind('<F5>', lambda e: self.filter_logs())
+            self.root.bind('<Control-Down>', lambda e: self.navigate_result(1))
+            self.root.bind('<Control-Up>', lambda e: self.navigate_result(-1))
+            # Esc 在焦点位于 keyword_combobox 时清空输入
+            def on_escape(event):
+                try:
+                    if self.root.focus_get() is self.keyword_combobox or \
+                       (hasattr(self.keyword_combobox, 'winfo_name') and
+                        self.root.focus_get() and
+                        self.root.focus_get().winfo_parent() == self.keyword_combobox.winfo_pathname(self.keyword_combobox.winfo_id())):
+                        self.clear_search()
+                except Exception:
+                    pass
+            self.root.bind('<Escape>', on_escape)
+        except Exception as e:
+            print(f"快捷键绑定失败: {e}")
+
     def display_results(self, keyword):
         """显示筛选结果 - 增强版本，支持关键字高亮"""
         # 清空之前的结果
@@ -1408,7 +1469,13 @@ class LogFilterApp:
             self.force_update_all_widgets(self.root, theme)
         except Exception as e:
             print(f"强制更新组件失败: {e}")
-            
+
+        # 配置 ttk 样式（Combobox / Treeview / Scrollbar 等）
+        try:
+            self._apply_ttk_style(theme)
+        except Exception as e:
+            print(f"ttk 样式应用失败: {e}")
+
         print(f"应用主题: {self.current_theme} (颜色已优化)")
     
     def update_special_components_theme(self, theme):
@@ -1488,19 +1555,30 @@ class LogFilterApp:
         try:
             # 更新当前组件
             widget_class = parent.__class__.__name__
-            
+            accent = theme.get('accent', theme.get('select_bg', '#0078D4'))
+            text_primary = theme.get('text_primary', '#FFFFFF')
+            frame_bg = theme.get('frame_bg', theme['bg'])
+
             if widget_class == 'Tk' or widget_class == 'Toplevel':
                 parent.configure(bg=theme['bg'])
             elif widget_class == 'Frame':
                 parent.configure(
-                    bg=theme.get('frame_bg', theme['bg']),
+                    bg=frame_bg,
+                    highlightthickness=0,
+                    relief='flat',
+                    bd=0
+                )
+            elif widget_class == 'LabelFrame':
+                parent.configure(
+                    bg=frame_bg,
+                    fg=theme['text_fg'],
                     highlightthickness=0,
                     relief='flat',
                     bd=0
                 )
             elif widget_class == 'Label':
                 parent.configure(
-                    bg=theme.get('frame_bg', theme['bg']),
+                    bg=frame_bg,
                     fg=theme['text_fg'],
                     highlightthickness=0
                 )
@@ -1519,8 +1597,34 @@ class LogFilterApp:
                     bg=theme['entry_bg'],
                     fg=theme['entry_fg'],
                     insertbackground=theme['entry_fg'],
-                    selectbackground=theme['accent'],
-                    selectforeground=theme['text_primary'],
+                    selectbackground=accent,
+                    selectforeground=text_primary,
+                    highlightthickness=0,
+                    relief='flat',
+                    bd=0
+                )
+            elif widget_class == 'Spinbox':
+                try:
+                    parent.configure(
+                        bg=theme['entry_bg'],
+                        fg=theme['entry_fg'],
+                        insertbackground=theme['entry_fg'],
+                        selectbackground=accent,
+                        selectforeground=text_primary,
+                        buttonbackground=theme['button_bg'],
+                        highlightthickness=0,
+                        relief='flat',
+                        bd=0
+                    )
+                except Exception:
+                    pass
+            elif widget_class in ('Checkbutton', 'Radiobutton'):
+                parent.configure(
+                    bg=frame_bg,
+                    fg=theme['text_fg'],
+                    activebackground=frame_bg,
+                    activeforeground=theme['text_fg'],
+                    selectcolor=theme['entry_bg'],
                     highlightthickness=0,
                     relief='flat',
                     bd=0
@@ -1529,8 +1633,8 @@ class LogFilterApp:
                 parent.configure(
                     bg=theme['text_bg'],
                     fg=theme['text_fg'],
-                    selectbackground=theme['accent'],
-                    selectforeground=theme['text_primary'],
+                    selectbackground=accent,
+                    selectforeground=text_primary,
                     insertbackground=theme['text_fg'],
                     highlightthickness=0,
                     relief='flat',
@@ -1540,17 +1644,17 @@ class LogFilterApp:
                 parent.configure(
                     bg=theme['text_bg'],
                     fg=theme['text_fg'],
-                    selectbackground=theme['accent'],
-                    selectforeground=theme['text_primary'],
+                    selectbackground=accent,
+                    selectforeground=text_primary,
                     highlightthickness=0,
                     relief='flat',
                     bd=0
                 )
             elif widget_class == 'Scrollbar':
                 parent.configure(
-                    bg=theme.get('scrollbar_bg', theme['frame_bg']),
-                    troughcolor=theme.get('scrollbar_bg', theme['frame_bg']),
-                    activebackground=theme['accent'],
+                    bg=theme.get('scrollbar_bg', frame_bg),
+                    troughcolor=theme.get('scrollbar_bg', frame_bg),
+                    activebackground=accent,
                     highlightthickness=0
                 )
             elif widget_class == 'PanedWindow':
@@ -1559,14 +1663,108 @@ class LogFilterApp:
                     sashrelief='flat',
                     sashwidth=2
                 )
-                
+            elif widget_class == 'Menu':
+                try:
+                    parent.configure(
+                        bg=theme['entry_bg'],
+                        fg=theme['text_fg'],
+                        activebackground=accent,
+                        activeforeground=text_primary,
+                        borderwidth=0,
+                        relief='flat'
+                    )
+                except Exception:
+                    pass
+
             # 递归更新所有子组件
             for child in parent.winfo_children():
                 self.force_update_all_widgets(child, theme)
-                
-        except Exception as e:
+
+        except Exception:
             # 忽略无法配置的组件，继续处理其他组件
             pass
+
+    def _apply_ttk_style(self, theme):
+        """为 ttk 组件（Combobox / Treeview / Scrollbar 等）统一配置样式。"""
+        try:
+            style = ttk.Style()
+            try:
+                style.theme_use('clam')  # clam 主题最支持颜色自定义
+            except Exception:
+                pass
+
+            accent = theme.get('accent', theme.get('select_bg', '#0078D4'))
+            text_primary = theme.get('text_primary', '#FFFFFF')
+            frame_bg = theme.get('frame_bg', theme['bg'])
+            entry_bg = theme['entry_bg']
+            entry_fg = theme['entry_fg']
+            border = theme.get('border', entry_bg)
+
+            # Combobox
+            style.configure('TCombobox',
+                            fieldbackground=entry_bg,
+                            background=theme['button_bg'],
+                            foreground=entry_fg,
+                            arrowcolor=entry_fg,
+                            bordercolor=border,
+                            lightcolor=border,
+                            darkcolor=border,
+                            selectbackground=accent,
+                            selectforeground=text_primary)
+            style.map('TCombobox',
+                      fieldbackground=[('readonly', entry_bg), ('!disabled', entry_bg)],
+                      foreground=[('readonly', entry_fg), ('!disabled', entry_fg)],
+                      selectbackground=[('readonly', accent)],
+                      selectforeground=[('readonly', text_primary)],
+                      background=[('active', theme['button_active_bg'])])
+            # 下拉列表的 Listbox（通过 option_add 设置）
+            try:
+                self.root.option_add('*TCombobox*Listbox.background', entry_bg)
+                self.root.option_add('*TCombobox*Listbox.foreground', entry_fg)
+                self.root.option_add('*TCombobox*Listbox.selectBackground', accent)
+                self.root.option_add('*TCombobox*Listbox.selectForeground', text_primary)
+            except Exception:
+                pass
+
+            # Treeview
+            style.configure('Treeview',
+                            background=entry_bg,
+                            fieldbackground=entry_bg,
+                            foreground=entry_fg,
+                            bordercolor=border,
+                            lightcolor=border,
+                            darkcolor=border)
+            style.map('Treeview',
+                      background=[('selected', accent)],
+                      foreground=[('selected', text_primary)])
+            style.configure('Treeview.Heading',
+                            background=theme['button_bg'],
+                            foreground=theme['button_fg'],
+                            relief='flat',
+                            bordercolor=border)
+            style.map('Treeview.Heading',
+                      background=[('active', theme['button_active_bg'])])
+
+            # Scrollbar (ttk)
+            style.configure('Vertical.TScrollbar',
+                            background=theme.get('scrollbar_bg', frame_bg),
+                            troughcolor=theme.get('scrollbar_bg', frame_bg),
+                            bordercolor=border,
+                            arrowcolor=entry_fg)
+            style.configure('Horizontal.TScrollbar',
+                            background=theme.get('scrollbar_bg', frame_bg),
+                            troughcolor=theme.get('scrollbar_bg', frame_bg),
+                            bordercolor=border,
+                            arrowcolor=entry_fg)
+
+            # 普通 ttk frame / label / button（若有用到）
+            style.configure('TFrame', background=frame_bg)
+            style.configure('TLabel', background=frame_bg, foreground=theme['text_fg'])
+            style.configure('TButton', background=theme['button_bg'], foreground=theme['button_fg'])
+            style.map('TButton', background=[('active', theme['button_active_bg'])])
+
+        except Exception as e:
+            print(f"ttk 样式配置失败: {e}")
     
     def show_theme_menu(self):
         """显示主题选择菜单"""
@@ -3222,7 +3420,16 @@ class LogFilterApp:
             # 读取文件内容
             with open(file_path, 'r', encoding='utf-8', errors='ignore') as file:
                 self.file_content = file.readlines()
-            
+
+            # 预扫描构建时间基准列表（支持文件中任意位置的 TIME[0]）
+            self.reset_time_baseline()
+            self._build_time_baselines()
+            if hasattr(self, 'time_toggle_button'):
+                if self.has_time_baseline:
+                    self.time_toggle_button.config(text="⏰ 时间列")
+                else:
+                    self.time_toggle_button.config(text="⏰ 时间列 (无基准)")
+
             # 添加到最近文件
             self.add_to_recent_files(file_path)
             
